@@ -11,8 +11,8 @@ import {
   getCachedProfiles,
   normalizeProfileId,
   upsertCachedCollection,
-} from '../../offline';
-import { resolveCardDisplay } from '../../components/utils';
+} from '../offline';
+import { resolveCardDisplay } from '../components/utils';
 
 export default function CardDetailPage() {
   const params = useParams();
