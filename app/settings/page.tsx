@@ -1,8 +1,9 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { supabase } from './supabase';[cite: 1]
+import { supabase } from '../supabase';
 import { 
   PieChart, 
   Layers, 
@@ -14,7 +15,7 @@ import {
   CloudOff, 
   Cloud 
 } from 'lucide-react';
-import { resolveCardDisplay } from './components/utils';[cite: 1]
+import { resolveCardDisplay } from '../components/utils';
 import {
   getCachedMasterData,
   getCachedProfiles,
@@ -24,7 +25,7 @@ import {
   normalizeProfileId,
   rememberUserId,
   setCachedProfiles,
-} from './offline';[cite: 1]
+} from '../offline';
 
 export default function RootPage() {
   const [hasMounted, setHasMounted] = useState(false);
@@ -44,8 +45,8 @@ export default function RootPage() {
     setIsOnline(getOnlineStatus());
 
     const init = async () => {
-      // セッション確認[cite: 1]
-      const { data: { session } } = await supabase.auth.getSession();[cite: 1]
+      // セッション確認
+      const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
         window.location.href = '/login'; // 未ログインならログインページへ
@@ -54,27 +55,27 @@ export default function RootPage() {
 
       setIsAuthorized(true);
       const user = session.user;
-      rememberUserId(user.id);[cite: 1]
+      rememberUserId(user.id);
       setUserId(user.id);
 
       // マスタデータの取得
-      const masterData = getCachedMasterData();[cite: 1]
+      const masterData = getCachedMasterData();
       setMasterMap(new Map(masterData.map((m: any) => [String(m.id), m])));
 
       // プロフィールの取得
-      let profileList = getCachedProfiles();[cite: 1]
+      let profileList = getCachedProfiles();
       if (getOnlineStatus()) {
         try {
           const { data: profilesData } = await supabase.from('profiles').select('*').eq('uuid', user.id);
           if (profilesData) {
             profileList = profilesData;
-            setCachedProfiles(profileList);[cite: 1]
+            setCachedProfiles(profileList);
           }
         } catch (e) { console.error(e); }
       }
       setProfiles(profileList);
 
-      const savedId = localStorage.getItem('active_profile_id');[cite: 1]
+      const savedId = localStorage.getItem('active_profile_id');
       setActiveProfileId(savedId || (profileList.length > 0 ? profileList[0].id : null));
     };
 
@@ -98,7 +99,7 @@ export default function RootPage() {
       setLoading(true);
       let data = getCachedRawCollection().filter((item: any) => 
         normalizeProfileId(item.profile_id) === normalizeProfileId(activeProfileId)
-      );[cite: 1]
+      );
 
       const rankCounts = [0, 0, 0, 0, 0, 0];
       data.forEach(item => {
@@ -196,7 +197,7 @@ export default function RootPage() {
         <div className="space-y-3">
           {recentCards.map((card, i) => {
             const cardInfo = masterMap.get(String(card.card_id));
-            const display = cardInfo ? resolveCardDisplay(cardInfo) : { hasImage: false, imageUrl: null };[cite: 1]
+            const display = cardInfo ? resolveCardDisplay(cardInfo) : { hasImage: false, imageUrl: null, name: 'Unknown' };
 
             return (
               <div key={i} className="bg-white rounded-[1.5rem] p-4 border border-slate-100 shadow-sm flex items-center justify-between">
