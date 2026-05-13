@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /profiles/{profileId} {
+      // 開発・テスト用：認証状態に関わらず読み書きを許可
+      allow read, write: if true;
+    }
+  }
+}
