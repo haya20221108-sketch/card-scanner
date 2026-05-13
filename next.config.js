@@ -10,15 +10,18 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // TypeScriptのエラーを無視してビルドを続行する
+  
+  // 🌟 Turbopackのエラーを解消するための設定
+  experimental: {
+    turbopack: {},
+  },
+
   typescript: {
     ignoreBuildErrors: true,
   },
-  // ESLintのエラーを無視してビルドを続行する
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // 🌟 画像エラーを解決するための設定を追加
   images: {
     remotePatterns: [
       {
