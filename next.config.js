@@ -12,9 +12,7 @@ const nextConfig = {
   reactStrictMode: true,
   
   // 🌟 Turbopackのエラーを解消するための設定
-  experimental: {
     turbopack: {},
-  },
 
   typescript: {
     ignoreBuildErrors: true,
