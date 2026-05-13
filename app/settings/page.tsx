@@ -27,7 +27,7 @@ import {
   setCachedProfiles,
 } from '../offline';
 
-export default function RootPage() {
+export default function SettingsPage() {
   const [hasMounted, setHasMounted] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [stats, setStats] = useState({ total: 0, byRank: [0, 0, 0, 0, 0, 0] });
