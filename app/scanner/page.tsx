@@ -7,6 +7,7 @@ import { analyzeCard } from './utils';
 import Image from 'next/image';
 import { resolveCardDisplay } from '../components/utils';
 import { supabase } from '../supabase';
+import { listProfiles } from '../profileStore';
 import {
   addCustomMasterCards,
   getActiveProfileId,
@@ -118,17 +119,11 @@ export default function ScannerPage() {
       if (!getOnlineStatus()) return;
       try {
         if (userId) {
-          const { data: profileList } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('uuid', userId)
-            .order('created_at', { ascending: true });
-          if (profileList) {
-            setCachedProfiles(profileList);
-            setProfiles(profileList);
-            if (!getActiveProfileId() && profileList[0]?.id) {
-              setActiveProfileIdState(profileList[0].id);
-            }
+          const profileList = await listProfiles(userId);
+          setCachedProfiles(profileList);
+          setProfiles(profileList);
+          if (!getActiveProfileId() && profileList[0]?.id) {
+            setActiveProfileIdState(profileList[0].id);
           }
         }
 

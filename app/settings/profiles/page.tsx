@@ -7,6 +7,7 @@ import { Plus, Trash2, UserPlus, Check, Edit2, Save, X } from 'lucide-react';
 import { getCachedProfiles, getOnlineStatus, rememberUserId, setActiveProfileId as persistActiveProfileId, setCachedProfiles } from '../../offline';
 import { CustomAlert } from '../../components/CustomAlert';
 import { useAuth } from '../../../AuthContext';
+import { createProfile, listProfiles, removeProfile, renameProfile } from '../../profileStore';
 
 export default function ProfilesPage() {
   const { user } = useAuth();
@@ -17,24 +18,6 @@ export default function ProfilesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [alert, setAlert] = useState({ isOpen: false, title: '', message: '', type: 'info' as 'info' | 'error' | 'success', onConfirm: undefined as any });
-
-  const requestProfilesApi = async (method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: Record<string, unknown>) => {
-    if (!user) throw new Error('Firebaseログインが見つかりません。');
-    const token = await user.getIdToken();
-    const response = await fetch('/api/profiles', {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(payload.error || 'アカウントの同期に失敗しました。');
-    }
-    return payload;
-  };
 
   useEffect(() => {
     const load = async () => {
@@ -47,8 +30,7 @@ export default function ProfilesPage() {
         rememberUserId(userId);
         if (userId) {
           try {
-            const payload = await requestProfilesApi('GET');
-            const nextProfiles = payload.profiles || [];
+            const nextProfiles = await listProfiles(userId);
             setProfiles(nextProfiles);
             setCachedProfiles(nextProfiles);
             const savedId = localStorage.getItem('active_profile_id');
@@ -80,7 +62,7 @@ export default function ProfilesPage() {
     }
     rememberUserId(userId);
     const localProfile = {
-      id: crypto.randomUUID(),
+      id: `local-profile-${Date.now()}`,
       display_name: newProfileName.trim(),
       uuid: userId,
       created_at: new Date().toISOString(),
@@ -99,18 +81,14 @@ export default function ProfilesPage() {
     }
 
     try {
-      const payload = await requestProfilesApi('POST', {
-        id: localProfile.id,
-        display_name: localProfile.display_name,
-      });
-      const cloudProfile = payload.profile || localProfile;
+      const cloudProfile = await createProfile(userId, localProfile.display_name);
       const synced = updated.map((profile) => profile.id === localProfile.id ? cloudProfile : profile);
       setProfiles(synced);
       setCachedProfiles(synced);
       if (!activeId) switchProfile(cloudProfile.id);
     } catch (error: any) {
       console.error('Add profile failed:', error);
-      setAlert({ isOpen: true, title: 'Cloud Sync Failed', message: `端末内には追加しました。Supabase同期に失敗: ${error.message}`, type: 'error', onConfirm: undefined });
+      setAlert({ isOpen: true, title: 'Firebase Sync Failed', message: `端末内には追加しました。Firebase同期に失敗: ${error.message}`, type: 'error', onConfirm: undefined });
     } finally {
       setLoading(false);
     }
@@ -125,12 +103,12 @@ export default function ProfilesPage() {
     setEditingId(null);
 
     try {
-      await requestProfilesApi('PATCH', { id, display_name: editingName.trim() });
+      await renameProfile(id, editingName.trim());
     } catch (error: any) {
       console.error('Update profile failed:', error);
       setProfiles(updated);
       setCachedProfiles(updated);
-      setAlert({ isOpen: true, title: 'Cloud Sync Failed', message: `端末内の名前は更新しました。Supabase同期に失敗: ${error.message}`, type: 'error', onConfirm: undefined });
+      setAlert({ isOpen: true, title: 'Firebase Sync Failed', message: `端末内の名前は更新しました。Firebase同期に失敗: ${error.message}`, type: 'error', onConfirm: undefined });
     }
     setLoading(false);
   };
@@ -153,7 +131,7 @@ export default function ProfilesPage() {
     if (activeId === id) switchProfile(updated[0]?.id || null);
 
     try {
-      await requestProfilesApi('DELETE', { id });
+      if (!id.startsWith('local-profile-')) await removeProfile(id);
     } catch (error: any) {
       console.error('Delete profile failed:', error);
       setProfiles(previous);

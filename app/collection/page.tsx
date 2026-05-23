@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 
 import { supabase } from '../supabase';
+import { listProfiles } from '../profileStore';
 import {
   getCachedMasterData,
   getCachedRawCollection,
@@ -146,17 +147,11 @@ export default function CollectionPage() {
       const userId = user?.uid || getCachedUserId();
       rememberUserId(userId);
       if (userId) {
-        const { data: freshProfiles } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('uuid', userId)
-          .order('created_at', { ascending: true });
-        if (freshProfiles) {
-          setProfiles(freshProfiles);
-          setCachedProfiles(freshProfiles);
-          if (freshProfiles.length > 0 && !batchProfileId) {
-            setBatchProfileId(freshProfiles[0].id);
-          }
+        const freshProfiles = await listProfiles(userId);
+        setProfiles(freshProfiles);
+        setCachedProfiles(freshProfiles);
+        if (freshProfiles.length > 0 && !batchProfileId) {
+          setBatchProfileId(freshProfiles[0].id);
         }
 
         const { data, error } = await supabase

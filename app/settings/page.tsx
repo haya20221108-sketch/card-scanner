@@ -20,8 +20,8 @@ import {
   setCachedMasterData,
   setCachedProfiles
 } from '../offline';
-import { supabase } from '../supabase';
 import { useAuth } from '../../AuthContext';
+import { listProfiles } from '../profileStore';
 
 const CONFIG = {
   gasUrl: 'https://script.google.com/macros/s/AKfycbzE912QE7aAjrxboaW8jLnjJ-tTW7JzePfkREe3vpnTYMsghP4eRMWd_cEK3ffLQn3w4Q/exec',
@@ -57,12 +57,7 @@ export default function SettingsPage() {
       // クラウドからプロフィールの再同期も行う
       const effectiveUserId = user?.uid || userId || getCachedUserId();
       if (effectiveUserId) {
-        const { data: profileList, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('uuid', effectiveUserId)
-          .order('created_at', { ascending: true });
-        if (error) throw error;
+        const profileList = await listProfiles(effectiveUserId);
         setCachedProfiles(profileList || []);
       }
     } catch (e) {

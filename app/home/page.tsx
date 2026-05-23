@@ -7,6 +7,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { resolveCardDisplay } from '../components/utils';
 import { supabase } from '../supabase';
+import { listProfiles } from '../profileStore';
 import {
   getCachedMasterData,
   getCachedProfiles,
@@ -56,15 +57,9 @@ export default function HomePage() {
 
       let profileList = getCachedProfiles();
       if (isCurrentlyOnline && user?.uid) {
-        const { data: freshProfiles } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('uuid', user.uid)
-          .order('created_at', { ascending: true });
-        if (freshProfiles) {
-          profileList = freshProfiles;
-          setCachedProfiles(freshProfiles);
-        }
+        const freshProfiles = await listProfiles(user.uid);
+        profileList = freshProfiles;
+        setCachedProfiles(freshProfiles);
 
         const { data: freshCollection } = await supabase
           .from('collections')
