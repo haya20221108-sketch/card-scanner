@@ -41,8 +41,8 @@ export default function AboutPage() {
           </div>
         </div>
 
-        <button className="flex items-center gap-2 text-[10px] font-black text-slate-300 uppercase tracking-widest hover:text-slate-900 transition-colors">
-          <Github size={14} /> Documentation
+        <button disabled className="flex items-center gap-2 text-[10px] font-black text-slate-300 uppercase tracking-widest cursor-not-allowed">
+          <Github size={14} /> Documentation (実装予定)
         </button>
       </div>
     </div>

@@ -124,19 +124,18 @@ export default function SettingsPage() {
               href="/settings/display" 
               icon={<Monitor size={18} className="text-indigo-500" />} 
               title="Display" 
-              subtitle="Themes (Layout: 実装予定)" 
+              subtitle="実装予定" 
             />
             <SettingsLink 
               href="/settings/notifications" 
               icon={<Bell size={18} className="text-pink-500" />} 
               title="Notifications" 
-              subtitle="App Activity Alerts (Push: 実装予定)" 
+              subtitle="実装予定" 
             />
-            <SettingsLink 
-              href="/settings/event" 
+            <SettingsPlanned
               icon={<Sliders size={18} className="text-purple-500" />} 
               title="Event Settings" 
-              subtitle="Event related configurations (実装予定)" 
+              subtitle="実装予定" 
             />
             <SettingsLink 
               href="/settings/about" 
@@ -149,6 +148,23 @@ export default function SettingsPage() {
         </div>
 
       </div>
+    </div>
+  );
+}
+
+function SettingsPlanned({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
+  return (
+    <div className="w-full flex items-center justify-between p-4 text-left opacity-60">
+      <div className="flex items-center gap-4">
+        <div className="p-2 bg-slate-100 text-slate-500 rounded-xl">
+          {icon}
+        </div>
+        <div>
+          <p className="text-xs font-black text-slate-900 uppercase">{title}</p>
+          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{subtitle}</p>
+        </div>
+      </div>
+      <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Soon</span>
     </div>
   );
 }
