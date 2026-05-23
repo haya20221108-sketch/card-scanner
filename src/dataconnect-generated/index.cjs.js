@@ -2,7 +2,7 @@ const { queryRef, executeQuery, validateArgsWithOptions, mutationRef, executeMut
 
 const connectorConfig = {
   connector: 'example',
-  service: 'card-scanner',
+  service: 'card-scanner-1',
   location: 'us-east4'
 };
 exports.connectorConfig = connectorConfig;

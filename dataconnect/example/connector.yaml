@@ -6,4 +6,3 @@ generate:
       packageJsonDir: ../..
       react: true
       angular: false
-      clientCache: {}

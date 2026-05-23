@@ -1,7 +1,6 @@
 {
   "name": "@dataconnect/generated",
   "version": "1.0.0",
-  "type": "module",
   "author": "Firebase <firebase-support@google.com> (https://firebase.google.com/)",
   "description": "Generated SDK For example",
   "license": "Apache-2.0",

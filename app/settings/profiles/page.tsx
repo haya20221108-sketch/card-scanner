@@ -1,211 +1,204 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
-import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, where } from 'firebase/firestore';
-import { Check, ChevronLeft, Cloud, CloudOff, Plus, Trash2, UserPlus, Zap } from 'lucide-react';
-import { db } from '@/app/firebase';
-import { supabase } from '@/app/supabase';
-import {
-  getActiveProfileId,
-  getCachedProfiles,
-  getOnlineStatus,
-  readJson,
-  rememberUserId,
-  setActiveProfileId,
-  setCachedProfiles,
-  writeJson,
-} from '@/app/offline';
-
-const PENDING_PROFILE_CHANGES_KEY = 'pending_profile_changes';
-
-function queueProfileChange(type: 'add' | 'delete', data: any) {
-  const pending = readJson<any[]>(PENDING_PROFILE_CHANGES_KEY, []);
-  pending.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, type, data, created_at: new Date().toISOString() });
-  writeJson(PENDING_PROFILE_CHANGES_KEY, pending);
-  return pending.length;
-}
+import { Plus, Trash2, UserPlus, Check, Edit2, Save, X } from 'lucide-react';
+import { supabase } from '../../supabase';
+import { getCachedProfiles, getOnlineStatus, rememberUserId, setActiveProfileId as persistActiveProfileId, setCachedProfiles } from '../../offline';
+import { CustomAlert } from '../../components/CustomAlert';
+import { useAuth } from '../../../AuthContext';
 
 export default function ProfilesPage() {
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
   const [profiles, setProfiles] = useState<any[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [newProfileName, setNewProfileName] = useState('');
-  const [activeProfileId, setActiveProfileIdState] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(getOnlineStatus);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [customAlert, setCustomAlert] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [alert, setAlert] = useState({ isOpen: false, title: '', message: '', type: 'info' as 'info' | 'error' | 'success', onConfirm: undefined as any });
 
   useEffect(() => {
-    setProfiles(getCachedProfiles());
-    setActiveProfileIdState(getActiveProfileId());
-
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    const loadProfiles = async () => {
-      if (!getOnlineStatus()) return;
-      try {
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        if (!currentUser) return;
-        setUser(currentUser);
-        rememberUserId(currentUser.id);
-        const q = query(collection(db, 'profiles'), where('uuid', '==', currentUser.id), orderBy('created_at', 'asc'));
-        const snapshot = await getDocs(q);
-        const list = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() }));
-        setProfiles(list);
-        setCachedProfiles(list);
-        if (!getActiveProfileId() && list.length > 0) handleSelectProfile(list[0].id);
-      } catch {
-        setCustomAlert('Cached profiles loaded.');
+    const load = async () => {
+      const cached = getCachedProfiles();
+      setProfiles(cached);
+      setActiveId(localStorage.getItem('active_profile_id') || (cached[0]?.id || null));
+      
+      if (getOnlineStatus()) {
+        const userId = user?.uid;
+        rememberUserId(userId);
+        if (userId) {
+          const { data } = await supabase.from('profiles').select('*').eq('uuid', userId).order('created_at', { ascending: true });
+          if (data) {
+            setProfiles(data);
+            setCachedProfiles(data);
+            const savedId = localStorage.getItem('active_profile_id');
+            const nextActiveId = savedId && data.some((p) => p.id === savedId) ? savedId : (data[0]?.id || null);
+            setActiveId(nextActiveId);
+            persistActiveProfileId(nextActiveId);
+          }
+        }
       }
     };
+    load();
+  }, [user]);
 
-    loadProfiles();
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  const handleSelectProfile = (id: string) => {
-    setActiveProfileIdState(id);
-    setActiveProfileId(id);
-    setCustomAlert('Account Switched');
+  const switchProfile = (id: string | null) => {
+    setActiveId(id);
+    persistActiveProfileId(id);
   };
 
-  const handleAddProfile = async () => {
-    const displayName = newProfileName.trim();
-    if (!displayName) return;
-
-    setIsUpdating(true);
-    const localProfile = { id: `local-profile-${Date.now()}`, display_name: displayName, created_at: new Date().toISOString() };
-    const nextProfiles = [...profiles, localProfile];
-    const shouldActivate = profiles.length === 0;
-    setProfiles(nextProfiles);
-    setCachedProfiles(nextProfiles);
-    setNewProfileName('');
-
-    if (shouldActivate) handleSelectProfile(localProfile.id);
-
-    if (isOnline && user) {
-      try {
-        const docRef = await addDoc(collection(db, 'profiles'), {
-          uuid: user.id,
-          display_name: displayName,
-          created_at: serverTimestamp(),
-        });
-        const synced = nextProfiles.map((profile) => profile.id === localProfile.id ? { ...profile, id: docRef.id } : profile);
-        setProfiles(synced);
-        setCachedProfiles(synced);
-        if (shouldActivate || activeProfileId === localProfile.id) handleSelectProfile(docRef.id);
-        setCustomAlert('Account Created');
-      } catch {
-        const count = queueProfileChange('add', { display_name: displayName });
-        setCustomAlert(`${count} profile change pending`);
-      }
-    } else {
-      const count = queueProfileChange('add', { display_name: displayName });
-      setCustomAlert(`${count} profile change pending`);
-    }
-
-    setIsUpdating(false);
-  };
-
-  const handleRemoveProfile = async (id: string) => {
-    if (profiles.length <= 1) {
-      setCustomAlert('Minimum 1 account required');
+  const handleAdd = async () => {
+    if (!newProfileName.trim()) return;
+    setLoading(true);
+    const userId = user?.uid;
+    if (!userId) {
+      setAlert({ isOpen: true, title: 'Login Required', message: 'ログイン中のFirebaseアカウントが見つかりません。', type: 'error', onConfirm: undefined });
+      setLoading(false);
       return;
     }
-    if (!confirm('Delete this account?')) return;
-
-    const next = profiles.filter((profile) => profile.id !== id);
-    setProfiles(next);
-    setCachedProfiles(next);
-    if (id === activeProfileId) handleSelectProfile(next[0].id);
-
-    if (isOnline && user && !id.startsWith('local-profile-')) {
-      try {
-        await deleteDoc(doc(db, 'profiles', id));
-        setCustomAlert('Account Removed');
-      } catch {
-        const count = queueProfileChange('delete', { id });
-        setCustomAlert(`${count} profile change pending`);
-      }
-    } else {
-      const count = queueProfileChange('delete', { id });
-      setCustomAlert(`${count} profile change pending`);
+    rememberUserId(userId);
+    const { data, error } = await supabase.from('profiles').insert([{ display_name: newProfileName, uuid: userId }]).select();
+    
+    if (!error && data) {
+      const updated = [...profiles, data[0]];
+      setProfiles(updated);
+      setCachedProfiles(updated);
+      if (!activeId) switchProfile(data[0].id);
+      setNewProfileName('');
     }
+    setLoading(false);
+  };
+
+  const handleUpdateName = async (id: string) => {
+    if (!editingName.trim()) return;
+    setLoading(true);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ display_name: editingName })
+      .eq('id', id);
+
+    if (!error) {
+      const updated = profiles.map(p => p.id === id ? { ...p, display_name: editingName } : p);
+      setProfiles(updated);
+      setCachedProfiles(updated);
+      setEditingId(null);
+    } else {
+      setAlert({ isOpen: true, title: 'Error', message: 'Failed to update name.', type: 'error', onConfirm: undefined });
+    }
+    setLoading(false);
+  };
+
+  const confirmDelete = (id: string, name: string) => {
+    setAlert({
+      isOpen: true,
+      title: 'Delete Profile',
+      message: `Are you sure you want to delete "${name}"? This will remove all associated card data.`,
+      type: 'error',
+      onConfirm: () => handleDelete(id)
+    });
+  };
+
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
+    if (!error) {
+      const updated = profiles.filter(p => p.id !== id);
+      setProfiles(updated);
+      setCachedProfiles(updated);
+      if (activeId === id) switchProfile(updated[0]?.id || null);
+    }
+    setAlert({ ...alert, isOpen: false });
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 pb-32 font-sans max-w-md mx-auto text-slate-900">
+    <div className="min-h-screen bg-slate-50 p-6 font-sans max-w-md mx-auto">
       <header className="flex items-center gap-4 mb-10 pt-4">
-        <Link href="/settings" className="p-2 -ml-2 text-slate-400"><ChevronLeft /></Link>
-        <h1 className="text-2xl font-black italic uppercase tracking-tighter">Profiles</h1>
-        <div className="ml-auto">{isOnline ? <Cloud size={18} className="text-emerald-500" /> : <CloudOff size={18} className="text-amber-500" />}</div>
+        <Link href="/settings" className="p-2 -ml-2 text-slate-400 bg-white rounded-xl shadow-sm border border-slate-100">
+          <ChevronLeft size={20} />
+        </Link>
+        <div>
+          <h1 className="text-xl font-black italic text-slate-900 uppercase tracking-tighter">Profiles</h1>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Multi-Inventory</p>
+        </div>
       </header>
 
-      <section className="bg-white rounded-[2rem] p-5 shadow-sm border border-slate-100 space-y-5">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500">
-            <UserPlus size={24} />
-          </div>
-          <div>
-            <h2 className="text-sm font-black text-slate-900 uppercase">Accounts</h2>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Offline editable</p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {profiles.map((profile) => (
-            <div
-              key={profile.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => handleSelectProfile(profile.id)}
-              onKeyDown={(event) => { if (event.key === 'Enter') handleSelectProfile(profile.id); }}
-              className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                activeProfileId === profile.id ? 'bg-slate-900 border-slate-900 shadow-lg text-white' : 'bg-slate-50 border-slate-100 text-slate-700'
-              }`}
-            >
-              <span className="text-xs font-black uppercase tracking-tight">{profile.display_name || 'Unnamed'}</span>
-              <span className="flex items-center gap-2">
-                {activeProfileId === profile.id && <Check size={16} className="text-blue-400" />}
-                <button
-                  type="button"
-                  onClick={(event) => { event.stopPropagation(); handleRemoveProfile(profile.id); }}
-                  className={activeProfileId === profile.id ? 'text-slate-500 hover:text-red-400' : 'text-slate-300 hover:text-red-500'}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="NEW NAME"
+      <div className="space-y-6">
+        {/* New Profile Input */}
+        <div className="bg-white rounded-[2rem] p-4 shadow-sm border border-slate-100 flex gap-2">
+          <input 
+            type="text" 
             value={newProfileName}
-            onChange={(event) => setNewProfileName(event.target.value)}
-            className="flex-1 bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-[10px] font-black outline-none focus:ring-2 focus:ring-emerald-500/20"
+            onChange={(e) => setNewProfileName(e.target.value)}
+            placeholder="New profile name..."
+            className="flex-1 bg-slate-50 border-none px-4 rounded-xl text-xs font-bold outline-none"
           />
-          <button type="button" onClick={handleAddProfile} disabled={isUpdating} className="bg-slate-900 text-white p-4 rounded-2xl active:scale-95 disabled:opacity-50">
+          <button 
+            onClick={handleAdd}
+            disabled={loading || !newProfileName.trim()}
+            className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center active:scale-90 transition-all disabled:opacity-30"
+          >
             <Plus size={20} />
           </button>
         </div>
-      </section>
-
-      {customAlert && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-xs bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-3">
-          <Zap size={16} className="text-blue-400" />
-          <p className="text-[9px] font-black uppercase tracking-widest flex-1">{customAlert}</p>
+        
+        {/* Profile List */}
+        <div className="space-y-3">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Your Accounts</p>
+          {profiles.map(p => (
+            <div key={p.id} className={`bg-white rounded-[1.5rem] p-4 border flex items-center justify-between transition-all ${activeId === p.id ? 'border-blue-500 shadow-lg shadow-blue-50' : 'border-slate-100 shadow-sm'}`}>
+              {editingId === p.id ? (
+                <div className="flex-1 flex items-center gap-2 pr-2">
+                  <input 
+                    value={editingName} 
+                    onChange={(e) => setEditingName(e.target.value)}
+                    className="flex-1 bg-slate-50 border-none px-3 py-1 rounded-lg text-xs font-black uppercase outline-none"
+                    autoFocus
+                  />
+                  <button onClick={() => handleUpdateName(p.id)} className="text-blue-500"><Save size={16} /></button>
+                  <button onClick={() => setEditingId(null)} className="text-slate-300"><X size={16} /></button>
+                </div>
+              ) : (
+                <button onClick={() => switchProfile(p.id)} className="flex-1 text-left flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${activeId === p.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                    {activeId === p.id ? <Check size={16} /> : <UserPlus size={16} />}
+                  </div>
+                  <span className={`text-xs font-black uppercase tracking-tight ${activeId === p.id ? 'text-slate-900' : 'text-slate-500'}`}>
+                    {p.display_name}
+                  </span>
+                </button>
+              )}
+              
+              <div className="flex items-center gap-1">
+                {!editingId && (
+                  <button 
+                    onClick={() => { setEditingId(p.id); setEditingName(p.display_name); }}
+                    className="p-2 text-slate-300 hover:text-blue-500 transition-colors"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                )}
+                <button 
+                  onClick={() => confirmDelete(p.id, p.display_name)}
+                  className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
+
+      <CustomAlert 
+        isOpen={alert.isOpen} 
+        onClose={() => setAlert({ ...alert, isOpen: false })} 
+        title={alert.title} 
+        message={alert.message} 
+        type={alert.type} 
+        onConfirm={alert.onConfirm}
+        onCancel={() => setAlert({ ...alert, isOpen: false })}
+      />
     </div>
   );
 }

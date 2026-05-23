@@ -1,42 +1,11 @@
 import { createWorker } from 'tesseract.js';
+import { resolveCardDisplay } from '../components/utils'; // resolveCardDisplayをcomponentsからインポート
 
 const API_KEY_ROBO = process.env.NEXT_PUBLIC_ROBOFLOW_API_KEY;
 const PROJECT_CARD = process.env.NEXT_PUBLIC_ROBOFLOW_PROJECT_CARD;
 const PROJECT_STAR = process.env.NEXT_PUBLIC_ROBOFLOW_PROJECT_STAR;
 
-/**
- * 表示用データ整形関数 (resolveCardDisplay)
- * スプレッドシートの各列(id, name, group, pack, rank, image)に対応
- */
-export const resolveCardDisplay = (card: any) => {
-  if (!card) return { id: "---", name: "---", pack: "---", rank: "0", imageUrl: null, hasImage: false };
-
-  // image列またはcroppedImgからURLを取得し、thumbnail APIへ変換
-  const rawUrl = card.image || card.croppedImg || "";
-  const match = rawUrl.match(/(?:id=|\/d\/|\/open\?id=)([\w-]{25,})/);
-  const fileId = match ? match[1] : (card.img_id || null);
-  
-  const finalImageUrl = fileId 
-    ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000` 
-    : rawUrl;
-
-  // rank列(数値)を優先し、記号があればカウントする
-  const starsStr = String(card.stars !== undefined ? card.stars : (card.rank || "0"));
-  const starCount = (starsStr.match(/[⭐★☆⭐︎✴︎✳︎]/g) || []).length;
-  const displayRank = starCount > 0 ? starCount : starsStr;
-
-  return {
-    id: String(card.id || ""),
-    name: String(card.name || "Unknown"),
-    group: String(card.group || ""),
-    pack: String(card.pack || "---"),
-    rank: displayRank,
-    imageUrl: finalImageUrl,
-    hasImage: !!finalImageUrl && finalImageUrl !== ""
-  };
-};
-
-export async function analyzeCard(base64Image: string, masterData: any[], setStatus: any) {
+export async function analyzeCard(base64Image: string, masterData: any[]) {
   let worker;
   try {
     const cardResponse = await fetch(`https://detect.roboflow.com/${PROJECT_CARD}?api_key=${API_KEY_ROBO}`, {
@@ -54,7 +23,6 @@ export async function analyzeCard(base64Image: string, masterData: any[], setSta
       const fullCanvas = await cropImageSimple(base64Image, card);
       const photoCardImage = fullCanvas.toDataURL("image/png");
 
-      setStatus(`[${i+1}] ランク判定中...`);
       const starResponse = await fetch(`https://detect.roboflow.com/${PROJECT_STAR}?api_key=${API_KEY_ROBO}`, {
         method: "POST", body: photoCardImage.split(',')[1],
         headers: { "Content-Type": "application/x-www-form-urlencoded" }
@@ -62,7 +30,6 @@ export async function analyzeCard(base64Image: string, masterData: any[], setSta
       const starData = await starResponse.json();
       const aiDetectedStars = starData.predictions ? starData.predictions.filter((p: any) => p.class === "star").length : 0;
 
-      setStatus(`[${i+1}] テキスト解析中...`);
       const { data } = await worker.recognize(photoCardImage);
       const ocrName = (data.text || "").split('\n')[0]?.replace(/\s+/g, "").trim() || "";
       const fullOcrText = (data.text || "").replace(/\s+/g, "");
@@ -101,14 +68,14 @@ export async function analyzeCard(base64Image: string, masterData: any[], setSta
       // resolveCardDisplay を使って表示データを準備
       const displayData = resolveCardDisplay(bestMatch);
 
-      console.log(`%c[Card #${i+1}] ${displayData.name} - ${displayData.rank}点`, "color: #3b82f6; font-weight: bold;");
+      console.log(`%c[Card #${i+1}] ${displayData.name} - ${bestMatch.rank}点`, "color: #3b82f6; font-weight: bold;");
 
       results.push({
-        id: displayData.id,
+        id: bestMatch.id,
         name: displayData.name,
-        group: displayData.group,
-        pack: displayData.pack,
-        stars: displayData.rank, // 数値を格納
+        group: bestMatch.group,
+        pack: bestMatch.pack,
+        stars: bestMatch.rank, // 数値を格納
         croppedImg: displayData.imageUrl,
         date: new Date().getTime()
       });

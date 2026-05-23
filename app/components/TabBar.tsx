@@ -8,12 +8,12 @@ export function TabBar() {
   const pathname = usePathname();
   
   // ログインページでは何も表示しない
-  if (pathname === '/login') return null;
+  if (pathname === '/') return null; // ルートパスがログインページなので、タブバーは表示しない
 
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/90 backdrop-blur-xl border-t border-slate-100 px-6 py-4 pb-8 flex justify-between items-center z-50 rounded-t-[2rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)]">
-      <Link href="/" className={`flex flex-col items-center gap-1.5 px-2 group transition-all ${pathname === '/' ? 'text-blue-600' : 'text-slate-400'}`}>
-        <Home size={22} className={pathname === '/' ? 'text-blue-600' : 'group-hover:text-slate-600'} />
+      <Link href="/home" className={`flex flex-col items-center gap-1.5 px-2 group transition-all ${pathname === '/home' ? 'text-blue-600' : 'text-slate-400'}`}>
+        <Home size={22} className={pathname === '/home' ? 'text-blue-600' : 'group-hover:text-slate-600'} />
         <span className="text-[9px] font-black uppercase tracking-widest">Home</span>
       </Link>
       

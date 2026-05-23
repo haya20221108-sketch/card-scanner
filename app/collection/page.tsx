@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 
 import {
@@ -19,15 +18,28 @@ import {
   Minus,
   User,
   Edit3,
+  RefreshCw,
+  Zap,
+  Settings2,
 } from 'lucide-react';
 
+import { supabase } from '../supabase';
 import {
   getCachedMasterData,
   getCachedRawCollection,
   getCachedProfiles,
+  getCachedUserId,
+  getOnlineStatus,
+  rememberUserId,
   normalizeProfileId,
+  setCachedProfiles,
+  setCachedRawCollection,
   upsertCachedCollection,
+  setCachedMasterData,
 } from '../offline';
+import { resolveCardDisplay } from '../components/utils';
+import { CustomAlert } from '../components/CustomAlert';
+import { useAuth } from '../../AuthContext';
 
 // =========================
 // 型定義
@@ -53,20 +65,11 @@ interface CollectionRecord {
 }
 
 // =========================
-// Helper
-// =========================
-
-const resolveCardDisplay = (card: Card) => ({
-  name: card.name || 'Unknown Card',
-  hasImage: !!card.image_url,
-  imageUrl: card.image_url || '',
-});
-
-// =========================
 // Page
 // =========================
 
 export default function CollectionPage() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [hasMounted, setHasMounted] = useState(false);
 
@@ -87,6 +90,33 @@ export default function CollectionPage() {
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
+  // Custom Alert State
+  const [alertConfig, setAlertConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'info' | 'error' | 'success';
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
+
+  const showAlert = (title: string, message: string, type: 'info' | 'error' | 'success' = 'info', onConfirm?: () => void, onCancel?: () => void) => {
+    setAlertConfig({ isOpen: true, title, message, type, onConfirm, onCancel });
+  };
+
+  const closeAlert = () => {
+    setAlertConfig(prev => ({ ...prev, isOpen: false, onConfirm: undefined, onCancel: undefined }));
+  };
+
+  // Batch Mode
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [batchProfileId, setBatchProfileId] = useState<string | null>(null);
+
   const [editingQuantities, setEditingQuantities] = useState<{
     [profileId: string]: number;
   }>({});
@@ -95,23 +125,58 @@ export default function CollectionPage() {
   // Load Data
   // =========================
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback(async () => {
     setLoading(true);
+    const isOnline = getOnlineStatus();
 
     const masterData = (getCachedMasterData() || []) as Card[];
-
-    const collData =
-      (getCachedRawCollection() || []) as CollectionRecord[];
-
+    setAllCards(masterData);
+    
     const profData =
       (getCachedProfiles() || []) as Profile[];
+    setProfiles(profData.filter((p) => p.id !== null));
+    
+    if (profData.length > 0 && !batchProfileId) {
+      setBatchProfileId(profData[0].id);
+    }
 
-    setAllCards(masterData);
+    let collData: CollectionRecord[] = [];
+
+    if (isOnline) {
+      const userId = user?.uid || getCachedUserId();
+      rememberUserId(userId);
+      if (userId) {
+        const { data: freshProfiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('uuid', userId)
+          .order('created_at', { ascending: true });
+        if (freshProfiles) {
+          setProfiles(freshProfiles);
+          setCachedProfiles(freshProfiles);
+          if (freshProfiles.length > 0 && !batchProfileId) {
+            setBatchProfileId(freshProfiles[0].id);
+          }
+        }
+
+        const { data, error } = await supabase
+          .from('collections')
+          .select('card_id, profile_id, quantity')
+          .eq('user_id', userId);
+
+        if (!error && data) {
+          collData = data as CollectionRecord[];
+          setCachedRawCollection(collData.map((record) => ({ ...record, user_id: userId })));
+        }
+      }
+    }
+
+    // オンラインで取得できなかった場合、またはオフラインの場合はキャッシュを使用
+    if (collData.length === 0) {
+      collData = (getCachedRawCollection() || []) as CollectionRecord[];
+    }
+
     setCollectionRecords(collData);
-
-    setProfiles(
-      profData.filter((p) => p.id !== null)
-    );
 
     const owned = new Set(
       collData
@@ -122,7 +187,7 @@ export default function CollectionPage() {
     setOwnedCardIds(owned);
 
     setLoading(false);
-  }, []);
+  }, [batchProfileId, user]);
 
   useEffect(() => {
     setHasMounted(true);
@@ -260,27 +325,184 @@ export default function CollectionPage() {
   };
 
   // =========================
-  // Save
+  // Trigger Save Confirmation
+  // =========================
+  const triggerSaveConfirmation = () => {
+    showAlert(
+      '変更を保存',
+      '所持数の変更をデータベースに保存しますか？',
+      'info', // 確認ダイアログなのでinfoタイプを使用
+      async () => {
+        await handleSave();
+        closeAlert();
+      },
+      closeAlert // キャンセルされたらアラートを閉じる
+    );
+  };
+
+  // =========================
+  // Save (Card Detail Modal)
   // =========================
 
   const handleSave = async () => {
     if (!selectedCard) return;
 
-    for (const profileId of Object.keys(
-      editingQuantities
-    )) {
-      upsertCachedCollection({
+    const isOnline = getOnlineStatus();
+    if (!isOnline) {
+      showAlert('Offline Sync', '変更をDBに保存できません。オンライン時に再度お試しください。', 'error');
+      return;
+    }
+
+    const userId = user?.uid || getCachedUserId();
+    rememberUserId(userId);
+    if (!userId) {
+      showAlert('Auth Required', 'ユーザーIDが見つかりません。再ログインしてください。', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const upsertData = Object.keys(editingQuantities).map(profileId => ({
+        user_id: userId,
         card_id: String(selectedCard.id),
         profile_id: profileId,
         quantity: editingQuantities[profileId],
-      });
+      }));
+
+      const { error } = await supabase
+        .from('collections')
+        .upsert(upsertData, { onConflict: 'user_id,card_id,profile_id' });
+
+      if (error) throw error;
+
+      // ローカルキャッシュも更新
+      upsertData.forEach(data => upsertCachedCollection(data));
+
+      setSelectedCard(null);
+      loadData(); // UIを最新の状態にリロード
+    } catch (e: any) {
+      console.error('Detail Save Error:', e);
+      showAlert('System Error', '保存中にエラーが発生しました。', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =========================
+  // Actions
+  // =========================
+
+  const toggleBatchMode = () => {
+    setIsBatchMode(!isBatchMode);
+    setIsFilterOpen(false); // パネルを閉じて操作しやすくする
+  };
+
+  // =========================
+  // Trigger Batch Save Confirmation
+  // =========================
+  const triggerBatchSaveConfirmation = () => {
+    showAlert(
+      '一括保存',
+      '全ての変更をデータベースに同期しますか？',
+      'info',
+      async () => {
+        await handleBatchSave();
+        closeAlert();
+      },
+      closeAlert
+    );
+  };
+
+  const handleBatchSave = async () => {
+    const isOnline = getOnlineStatus();
+    if (!isOnline) {
+      showAlert('Offline Mode', '変更をDBに保存できません。接続を確認してください。', 'error');
+      return;
     }
 
-    alert('所持数を更新しました！');
+    const userId = user?.uid || getCachedUserId();
+    rememberUserId(userId);
+    if (!userId) {
+      showAlert('Auth Error', 'セッションが切れました。ログインしてください。', 'error');
+      return;
+    }
 
-    setSelectedCard(null);
+    setLoading(true);
+    try {
+      // 現在のメモリ上のコレクションデータをSupabase形式に整形
+      const upsertData = collectionRecords.map(r => ({
+        user_id: userId,
+        card_id: String(r.card_id),
+        profile_id: r.profile_id,
+        quantity: r.quantity
+      }));
 
-    loadData();
+      const { error } = await supabase
+        .from('collections')
+        .upsert(upsertData, { onConflict: 'user_id,card_id,profile_id' });
+
+      if (error) throw error;
+
+      // データベース保存成功後にローカルキャッシュも一括更新
+      upsertData.forEach(data => upsertCachedCollection(data));
+
+      setIsBatchMode(false);
+    } catch (e) {
+      console.error('Batch Save Error:', e);
+      showAlert('Save Failed', '一括保存中にエラーが発生しました。', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }; 
+
+  const handleSyncMaster = async () => {
+    const isOnline = getOnlineStatus();
+    if (!isOnline) {
+      showAlert('Connect Required', 'オフラインです。オンライン時に実行してください。', 'info');
+      return;
+    }
+    try {
+      const res = await fetch('https://script.google.com/macros/s/AKfycbzE912QE7aAjrxboaW8jLnjJ-tTW7JzePfkREe3vpnTYMsghP4eRMWd_cEK3ffLQn3w4Q/exec');
+      const data = await res.json();
+      setCachedMasterData(data);
+      window.location.reload();
+    } catch (e) {
+      showAlert('Sync Error', 'マスタデータの同期に失敗しました。', 'error');
+    }
+  };
+
+  const handleBatchAdd = (cardId: string) => {
+    if (!batchProfileId) {
+      showAlert('アカウントを選択', '追加先のアカウントを選択してください', 'info');
+      return;
+    }
+    
+    const targetPId = normalizeProfileId(batchProfileId);
+    const stats = cardStatsMap.get(cardId);
+    const currentQty = stats?.profileQuantities[targetPId] || 0;
+    const nextQty = currentQty + 1;
+
+    // UIに即時反映
+    setCollectionRecords(prev => {
+      const idx = prev.findIndex(r => 
+        String(r.card_id) === cardId && normalizeProfileId(r.profile_id || '') === targetPId
+      );
+      if (idx > -1) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantity: nextQty };
+        return next;
+      } else {
+        return [...prev, { card_id: cardId, profile_id: batchProfileId, quantity: nextQty }];
+      }
+    });
+
+    if (nextQty > 0) {
+      setOwnedCardIds(prev => {
+        const nextSet = new Set(prev);
+        nextSet.add(cardId);
+        return nextSet;
+      });
+    }
   };
 
   // =========================
@@ -339,6 +561,55 @@ export default function CollectionPage() {
         </div>
       </div>
 
+      {/* Batch Mode Banner */}
+      {isBatchMode && (
+        <div className="bg-blue-600 text-white p-3 sticky top-[73px] z-10 shadow-lg flex flex-col gap-2 animate-in slide-in-from-top-full duration-300">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <Zap size={14} fill="white" className="animate-pulse" />
+              <span className="text-[10px] font-black uppercase tracking-widest">一括追加モード有効</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={triggerBatchSaveConfirmation}
+                className="px-3 py-1.5 bg-white text-blue-600 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+              >
+                保存して終了
+              </button>
+              <button 
+                onClick={() => showAlert(
+                  '変更を破棄しますか？',
+                  '保存されていない変更は失われます。',
+                  'info',
+                  () => { // Confirm
+                    setIsBatchMode(false);
+                    loadData();
+                    closeAlert();
+                  },
+                  () => closeAlert() // Cancel
+                )} 
+                className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+          <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 px-1">
+            {profiles.map(p => (
+              <button
+                key={p.id}
+                onClick={() => setBatchProfileId(p.id)}
+                className={`flex-shrink-0 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-tighter transition-all ${
+                  batchProfileId === p.id ? 'bg-white text-blue-600 shadow-md' : 'bg-blue-700 text-blue-200'
+                }`}
+              >
+                {p.display_name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Active Filter Chips */}
       <div className="max-w-2xl mx-auto w-full px-4 overflow-x-auto no-scrollbar flex gap-2 pt-2">
         {filterPack && <FilterChip label={filterPack} onClear={() => setFilterPack('')} />}
@@ -381,6 +652,33 @@ export default function CollectionPage() {
         {/* Pro Filter Panel */}
         {isFilterOpen && (
           <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl p-6 space-y-6 animate-in slide-in-from-top-4 duration-300">
+            {/* Quick Actions */}
+            <div className="space-y-3">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Settings2 size={12} /> クイックアクション
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={handleSyncMaster}
+                  className="flex items-center justify-center gap-2 py-3 px-4 bg-slate-50 hover:bg-slate-100 rounded-2xl text-[10px] font-black uppercase text-slate-700 transition-all active:scale-95"
+                >
+                  <RefreshCw size={14} className="text-blue-500" />
+                  同期
+                </button>
+                <button
+                  onClick={toggleBatchMode}
+                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-2xl text-[10px] font-black uppercase transition-all active:scale-95 ${
+                    isBatchMode ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  <Zap size={14} className={isBatchMode ? 'text-white' : 'text-blue-500'} />
+                  一括追加
+                </button>
+              </div>
+            </div>
+
+            <div className="h-px bg-slate-50 mx-2" />
+
             {/* Ownership Tabs */}
             <div className="space-y-3">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -516,8 +814,13 @@ export default function CollectionPage() {
               return (
                 <button
                   key={String(card.id)}
-                  onClick={() =>
-                    openCardDetail(card)
+                  onClick={() => {
+                    if (isBatchMode) {
+                      handleBatchAdd(String(card.id));
+                    } else {
+                      openCardDetail(card);
+                    }
+                  }
                   }
                   className={`relative overflow-hidden rounded-[1.5rem] border p-2.5 pt-4 text-left transition-all duration-500 active:scale-95 flex flex-col justify-between h-full animate-in fade-in slide-in-from-bottom-2 ${
                     totalQuantity > 0
@@ -527,12 +830,20 @@ export default function CollectionPage() {
                 >
                   {/* Quantity Badge - Top Right Absolute */}
                   <div
-                    className={`absolute top-2 right-2 min-w-[20px] h-[20px] px-1 rounded-lg flex items-center justify-center text-[9px] font-black leading-none ${
+                    className={`absolute top-2 right-2 min-w-[20px] h-[20px] px-1.5 rounded-lg flex items-center justify-center text-[9px] font-black leading-none gap-1 ${
                       totalQuantity > 0
                         ? 'bg-blue-600 text-white'
                         : 'bg-slate-100 text-slate-400'
                     }`}
                   >
+                    {isBatchMode && batchProfileId && (
+                      <>
+                        <span className={totalQuantity > 0 ? 'text-blue-200' : 'text-slate-400'}>
+                          {stats?.profileQuantities[normalizeProfileId(batchProfileId)] || 0}
+                        </span>
+                        <span className={totalQuantity > 0 ? 'text-blue-400' : 'text-slate-200'}>|</span>
+                      </>
+                    )}
                     {totalQuantity}
                   </div>
 
@@ -654,8 +965,8 @@ export default function CollectionPage() {
             {/* Action Footer */}
             <div className="w-full p-6 bg-white border-t border-slate-50">
               {isEditing ? (
-                <button
-                  onClick={handleSave}
+                <button // 保存ボタンのonClickを修正
+                  onClick={triggerSaveConfirmation}
                   className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-blue-100 flex items-center justify-center gap-3 active:scale-95 transition-all"
                 >
                   <Save size={16} /> 変更を保存
@@ -672,6 +983,17 @@ export default function CollectionPage() {
           </div>
         </div>
       )}
+
+      {/* Custom Alert Component */}
+      <CustomAlert 
+        isOpen={alertConfig.isOpen}
+        onClose={closeAlert}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        onConfirm={alertConfig.onConfirm}
+        onCancel={alertConfig.onCancel}
+      />
     </div>
   );
 }

@@ -1,11 +1,11 @@
 specVersion: "v1"
-serviceId: "card-scanner"
+serviceId: "card-scanner-1"
 location: "us-east4"
 schemas:
   - source: "./schema"
     datasource:
       postgresql:
-        database: "fdcdb"
+        database: "fdcdb-1"
         cloudSql:
           instanceId: "card-scanner-fdc"
           # schemaValidation: "STRICT"     # STRICT mode makes Postgres schema match Data Connect exactly.
