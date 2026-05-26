@@ -51,6 +51,7 @@ import {
   RotateCcw,
   Search,
   Sparkles,
+  Star,
   Trash2,
   User,
   X,
