@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Bell, Sparkles, Database, ShieldCheck } from 'lucide-react';
 
@@ -63,18 +63,23 @@ export default function NotificationsPage() {
 }
 
 function NotificationToggle({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
+  const [enabled, setEnabled] = useState(false);
+
   return (
-    <div className="w-full flex items-center justify-between p-6 text-left opacity-50">
+    <div className={`w-full flex items-center justify-between p-6 text-left transition-opacity ${enabled ? 'opacity-100' : 'opacity-50'}`}>
       <div className="flex items-center gap-4">
         <div className="p-3 bg-slate-50 rounded-2xl">{icon}</div>
         <div>
           <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{title}</p>
-          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{subtitle}</p>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{subtitle}</p>
         </div>
       </div>
-      <div className="w-12 h-6 rounded-full transition-all relative bg-slate-200">
-        <div className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all" />
-      </div>
+      <button 
+        onClick={() => setEnabled(!enabled)}
+        className={`w-12 h-6 rounded-full transition-all relative ${enabled ? 'bg-blue-600' : 'bg-slate-200'}`}
+      >
+        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${enabled ? 'left-7' : 'left-1'}`} />
+      </button>
     </div>
   );
 }

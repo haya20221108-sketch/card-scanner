@@ -1,6 +1,6 @@
 'use client';
 
-export type ProfileId = string | null;
+export type PUid = string | null;
 
 export type CachedProfile = {
   id: string;
@@ -10,7 +10,7 @@ export type CachedProfile = {
 
 export type CollectionRecord = {
   user_id?: string | null;
-  profile_id?: ProfileId;
+  p_uid?: string; // p_uid を保持するため string に変更
   card_id: string;
   quantity: number;
   updated_at?: string;
@@ -54,7 +54,7 @@ export function writeJson<T>(key: string, value: T) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-export function normalizeProfileId(value: unknown): ProfileId {
+export function normalizePUid(value: unknown): PUid {
   if (value === null || value === undefined || value === '') return null;
   return String(value);
 }
@@ -69,14 +69,14 @@ export function getCachedUserId() {
   return localStorage.getItem(STORAGE_KEYS.lastUserId);
 }
 
-export function getActiveProfileId(): ProfileId {
+export function getActivePUid(): PUid {
   if (!canUseStorage()) return null;
-  return normalizeProfileId(localStorage.getItem(STORAGE_KEYS.activeProfileId));
+  return normalizePUid(localStorage.getItem(STORAGE_KEYS.activeProfileId));
 }
 
-export function setActiveProfileId(profileId: ProfileId) {
+export function setActivePUid(pUid: PUid) {
   if (!canUseStorage()) return;
-  if (profileId) localStorage.setItem(STORAGE_KEYS.activeProfileId, profileId);
+  if (pUid) localStorage.setItem(STORAGE_KEYS.activeProfileId, pUid);
   else localStorage.removeItem(STORAGE_KEYS.activeProfileId);
 }
 
@@ -86,6 +86,14 @@ export function getCachedProfiles() {
 
 export function setCachedProfiles(profiles: CachedProfile[]) {
   writeJson(STORAGE_KEYS.cachedProfiles, profiles);
+}
+
+export function isDbBackedProfile(profile: CachedProfile) {
+  return !String(profile.id).startsWith('local-profile-');
+}
+
+export function getDbBackedProfiles(profiles: CachedProfile[]) {
+  return profiles.filter(isDbBackedProfile);
 }
 
 function uniqueById(cards: any[]) {
@@ -128,14 +136,14 @@ export function setCachedRawCollection(records: CollectionRecord[]) {
 
 function sameRecord(a: CollectionRecord, b: CollectionRecord) {
   return String(a.card_id) === String(b.card_id)
-    && normalizeProfileId(a.profile_id) === normalizeProfileId(b.profile_id)
+    && normalizePUid(a.p_uid) === normalizePUid(b.p_uid)
     && (!b.user_id || !a.user_id || String(a.user_id) === String(b.user_id));
 }
 
 export function upsertCachedCollection(record: CollectionRecord) {
   const normalized = {
     ...record,
-    profile_id: normalizeProfileId(record.profile_id),
+    p_uid: normalizePUid(record.p_uid),
     card_id: String(record.card_id),
     quantity: Math.max(0, Number(record.quantity) || 0),
     updated_at: record.updated_at || new Date().toISOString(),
@@ -147,8 +155,8 @@ export function upsertCachedCollection(record: CollectionRecord) {
   return next;
 }
 
-export function deleteCachedCollection(cardId: string, profileId: ProfileId, userId?: string | null) {
-  const target = { card_id: cardId, profile_id: normalizeProfileId(profileId), user_id: userId || undefined, quantity: 0 };
+export function deleteCachedCollection(cardId: string, pUid: PUid, userId?: string | null) {
+  const target = { card_id: cardId, p_uid: normalizePUid(pUid), user_id: userId || undefined, quantity: 0 };
   const next = getCachedRawCollection().filter((item) => !sameRecord(item, target));
   setCachedRawCollection(next);
   return next;
@@ -157,7 +165,7 @@ export function deleteCachedCollection(cardId: string, profileId: ProfileId, use
 export function queueCollectionChange(type: PendingCollectionChange['type'], data: CollectionRecord) {
   const normalized = {
     ...data,
-    profile_id: normalizeProfileId(data.profile_id),
+    p_uid: normalizePUid(data.p_uid),
     card_id: String(data.card_id),
     quantity: Math.max(0, Number(data.quantity) || 0),
   };

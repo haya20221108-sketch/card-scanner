@@ -7,7 +7,7 @@ import {
   getCachedMasterData,
   getCachedRawCollection,
   getPendingCollectionChanges,
-  normalizeProfileId,
+  normalizePUid,
 } from '@/app/offline';
 
 export default function EventPage() {
@@ -64,11 +64,11 @@ export default function EventPage() {
 
       <section className="space-y-3">
         {activity.length > 0 ? activity.map((item, index) => (
-          <div key={`${item.card_id}-${item.profile_id}-${index}`} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center justify-between">
+          <div key={`${item.card_id}-${item.p_uid}-${index}`} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center justify-between">
             <div className="min-w-0">
               <p className="text-xs font-black text-slate-800 truncate">{item.card?.name || `ID: ${item.card_id}`}</p>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                {normalizeProfileId(item.profile_id) || 'Default'} / {item.time ? new Date(item.time).toLocaleString() : 'Local'}
+                {normalizePUid(item.p_uid) || 'Default'} / {item.time ? new Date(item.time).toLocaleString() : 'Local'}
               </p>
             </div>
             <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">x{item.quantity}</span>

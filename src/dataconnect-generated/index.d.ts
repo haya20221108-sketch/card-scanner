@@ -1,7 +1,6 @@
-import { ConnectorConfig, DataConnect, QueryRef, QueryPromise, ExecuteQueryOptions, MutationRef, MutationPromise, DataConnectSettings } from 'firebase/data-connect';
+import { ConnectorConfig, DataConnect, QueryRef, QueryPromise, ExecuteQueryOptions, MutationRef, MutationPromise } from 'firebase/data-connect';
 
 export const connectorConfig: ConnectorConfig;
-export const dataConnectSettings: DataConnectSettings;
 
 export type TimestampString = string;
 export type UUIDString = string;
@@ -11,121 +10,102 @@ export type DateString = string;
 
 
 
-export interface AddReviewData {
-  review_upsert: Review_Key;
+export interface AddCardToInventoryData {
+  userCard_upsert: UserCard_Key;
 }
 
-export interface AddReviewVariables {
-  movieId: UUIDString;
-  rating: number;
-  reviewText: string;
+export interface AddCardToInventoryVariables {
+  cardId: UUIDString;
+  quantity: number;
+  condition: string;
 }
 
-export interface CreateMovieData {
-  movie_insert: Movie_Key;
+export interface AddCardToUserCollectionData {
+  userCard_insert: UserCard_Key;
 }
 
-export interface CreateMovieVariables {
-  title: string;
-  genre: string;
+export interface AddCardToUserCollectionVariables {
+  cardId: UUIDString;
+  quantity: number;
+  condition: string;
+  acquiredAt: TimestampString;
+  pricePaid?: number | null;
+  notes?: string | null;
+  isForTrade?: boolean | null;
+  isForSale?: boolean | null;
+}
+
+export interface BinderCard_Key {
+  binderId: UUIDString;
+  userCardUserId: UUIDString;
+  userCardCardId: UUIDString;
+  __typename?: 'BinderCard_Key';
+}
+
+export interface Binder_Key {
+  id: UUIDString;
+  __typename?: 'Binder_Key';
+}
+
+export interface Card_Key {
+  id: UUIDString;
+  __typename?: 'Card_Key';
+}
+
+export interface CreateCardData {
+  card_insert: Card_Key;
+}
+
+export interface CreateCardVariables {
+  cardName: string;
+  set: string;
+  rarity: string;
   imageUrl: string;
 }
 
-export interface DeleteReviewData {
-  review_delete?: Review_Key | null;
+export interface CreateNewBinderData {
+  binder_insert: Binder_Key;
 }
 
-export interface DeleteReviewVariables {
-  movieId: UUIDString;
+export interface CreateNewBinderVariables {
+  binderName: string;
+  isPublic: boolean;
+  description?: string | null;
 }
 
-export interface GetMovieByIdData {
-  movie?: {
-    id: UUIDString;
-    title: string;
+export interface GetCardDetailsData {
+  card?: {
+    cardName: string;
+    set: string;
+    rarity: string;
     imageUrl: string;
-    genre?: string | null;
-    metadata?: {
-      rating?: number | null;
-      releaseYear?: number | null;
-      description?: string | null;
-    };
-      reviews: ({
-        reviewText?: string | null;
-        reviewDate: DateString;
-        rating?: number | null;
-        user: {
-          id: string;
-          username: string;
-        } & User_Key;
-      })[];
-  } & Movie_Key;
+    cardType?: string | null;
+    cardNumber?: string | null;
+    artist?: string | null;
+    releaseDate?: DateString | null;
+  };
 }
 
-export interface GetMovieByIdVariables {
-  id: UUIDString;
+export interface GetCardDetailsVariables {
+  cardId: UUIDString;
 }
 
-export interface ListMoviesData {
-  movies: ({
+export interface GetMyBindersData {
+  binders: ({
     id: UUIDString;
-    title: string;
-    imageUrl: string;
-    genre?: string | null;
-  } & Movie_Key)[];
+    binderName: string;
+    isPublic: boolean;
+    createdAt: TimestampString;
+    updatedAt: TimestampString;
+  } & Binder_Key)[];
 }
 
-export interface ListUserReviewsData {
-  user?: {
-    id: string;
-    username: string;
-    reviews: ({
-      rating?: number | null;
-      reviewDate: DateString;
-      reviewText?: string | null;
-      movie: {
-        id: UUIDString;
-        title: string;
-      } & Movie_Key;
-    })[];
-  } & User_Key;
+export interface RemoveCardFromInventoryData {
+  userCard_delete?: UserCard_Key | null;
 }
 
-export interface ListUsersData {
-  users: ({
-    id: string;
-    username: string;
-  } & User_Key)[];
-}
-
-export interface MovieMetadata_Key {
-  id: UUIDString;
-  __typename?: 'MovieMetadata_Key';
-}
-
-export interface Movie_Key {
-  id: UUIDString;
-  __typename?: 'Movie_Key';
-}
-
-export interface Review_Key {
-  userId: string;
-  movieId: UUIDString;
-  __typename?: 'Review_Key';
-}
-
-export interface SearchMovieData {
-  movies: ({
-    id: UUIDString;
-    title: string;
-    genre?: string | null;
-    imageUrl: string;
-  } & Movie_Key)[];
-}
-
-export interface SearchMovieVariables {
-  titleInput?: string | null;
-  genre?: string | null;
+export interface RemoveCardFromInventoryVariables {
+  cardId: UUIDString;
 }
 
 export interface UpsertUserData {
@@ -133,25 +113,31 @@ export interface UpsertUserData {
 }
 
 export interface UpsertUserVariables {
-  username: string;
+  displayName: string;
+}
+
+export interface UserCard_Key {
+  userId: UUIDString;
+  cardId: UUIDString;
+  __typename?: 'UserCard_Key';
 }
 
 export interface User_Key {
-  id: string;
+  id: UUIDString;
   __typename?: 'User_Key';
 }
 
-interface CreateMovieRef {
+interface CreateCardRef {
   /* Allow users to create refs without passing in DataConnect */
-  (vars: CreateMovieVariables): MutationRef<CreateMovieData, CreateMovieVariables>;
+  (vars: CreateCardVariables): MutationRef<CreateCardData, CreateCardVariables>;
   /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: CreateMovieVariables): MutationRef<CreateMovieData, CreateMovieVariables>;
+  (dc: DataConnect, vars: CreateCardVariables): MutationRef<CreateCardData, CreateCardVariables>;
   operationName: string;
 }
-export const createMovieRef: CreateMovieRef;
+export const createCardRef: CreateCardRef;
 
-export function createMovie(vars: CreateMovieVariables): MutationPromise<CreateMovieData, CreateMovieVariables>;
-export function createMovie(dc: DataConnect, vars: CreateMovieVariables): MutationPromise<CreateMovieData, CreateMovieVariables>;
+export function createCard(vars: CreateCardVariables): MutationPromise<CreateCardData, CreateCardVariables>;
+export function createCard(dc: DataConnect, vars: CreateCardVariables): MutationPromise<CreateCardData, CreateCardVariables>;
 
 interface UpsertUserRef {
   /* Allow users to create refs without passing in DataConnect */
@@ -165,87 +151,75 @@ export const upsertUserRef: UpsertUserRef;
 export function upsertUser(vars: UpsertUserVariables): MutationPromise<UpsertUserData, UpsertUserVariables>;
 export function upsertUser(dc: DataConnect, vars: UpsertUserVariables): MutationPromise<UpsertUserData, UpsertUserVariables>;
 
-interface AddReviewRef {
+interface AddCardToInventoryRef {
   /* Allow users to create refs without passing in DataConnect */
-  (vars: AddReviewVariables): MutationRef<AddReviewData, AddReviewVariables>;
+  (vars: AddCardToInventoryVariables): MutationRef<AddCardToInventoryData, AddCardToInventoryVariables>;
   /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: AddReviewVariables): MutationRef<AddReviewData, AddReviewVariables>;
+  (dc: DataConnect, vars: AddCardToInventoryVariables): MutationRef<AddCardToInventoryData, AddCardToInventoryVariables>;
   operationName: string;
 }
-export const addReviewRef: AddReviewRef;
+export const addCardToInventoryRef: AddCardToInventoryRef;
 
-export function addReview(vars: AddReviewVariables): MutationPromise<AddReviewData, AddReviewVariables>;
-export function addReview(dc: DataConnect, vars: AddReviewVariables): MutationPromise<AddReviewData, AddReviewVariables>;
+export function addCardToInventory(vars: AddCardToInventoryVariables): MutationPromise<AddCardToInventoryData, AddCardToInventoryVariables>;
+export function addCardToInventory(dc: DataConnect, vars: AddCardToInventoryVariables): MutationPromise<AddCardToInventoryData, AddCardToInventoryVariables>;
 
-interface DeleteReviewRef {
+interface RemoveCardFromInventoryRef {
   /* Allow users to create refs without passing in DataConnect */
-  (vars: DeleteReviewVariables): MutationRef<DeleteReviewData, DeleteReviewVariables>;
+  (vars: RemoveCardFromInventoryVariables): MutationRef<RemoveCardFromInventoryData, RemoveCardFromInventoryVariables>;
   /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: DeleteReviewVariables): MutationRef<DeleteReviewData, DeleteReviewVariables>;
+  (dc: DataConnect, vars: RemoveCardFromInventoryVariables): MutationRef<RemoveCardFromInventoryData, RemoveCardFromInventoryVariables>;
   operationName: string;
 }
-export const deleteReviewRef: DeleteReviewRef;
+export const removeCardFromInventoryRef: RemoveCardFromInventoryRef;
 
-export function deleteReview(vars: DeleteReviewVariables): MutationPromise<DeleteReviewData, DeleteReviewVariables>;
-export function deleteReview(dc: DataConnect, vars: DeleteReviewVariables): MutationPromise<DeleteReviewData, DeleteReviewVariables>;
+export function removeCardFromInventory(vars: RemoveCardFromInventoryVariables): MutationPromise<RemoveCardFromInventoryData, RemoveCardFromInventoryVariables>;
+export function removeCardFromInventory(dc: DataConnect, vars: RemoveCardFromInventoryVariables): MutationPromise<RemoveCardFromInventoryData, RemoveCardFromInventoryVariables>;
 
-interface ListMoviesRef {
+interface GetMyBindersRef {
   /* Allow users to create refs without passing in DataConnect */
-  (): QueryRef<ListMoviesData, undefined>;
+  (): QueryRef<GetMyBindersData, undefined>;
   /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect): QueryRef<ListMoviesData, undefined>;
+  (dc: DataConnect): QueryRef<GetMyBindersData, undefined>;
   operationName: string;
 }
-export const listMoviesRef: ListMoviesRef;
+export const getMyBindersRef: GetMyBindersRef;
 
-export function listMovies(options?: ExecuteQueryOptions): QueryPromise<ListMoviesData, undefined>;
-export function listMovies(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMoviesData, undefined>;
+export function getMyBinders(options?: ExecuteQueryOptions): QueryPromise<GetMyBindersData, undefined>;
+export function getMyBinders(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<GetMyBindersData, undefined>;
 
-interface ListUsersRef {
+interface CreateNewBinderRef {
   /* Allow users to create refs without passing in DataConnect */
-  (): QueryRef<ListUsersData, undefined>;
+  (vars: CreateNewBinderVariables): MutationRef<CreateNewBinderData, CreateNewBinderVariables>;
   /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect): QueryRef<ListUsersData, undefined>;
+  (dc: DataConnect, vars: CreateNewBinderVariables): MutationRef<CreateNewBinderData, CreateNewBinderVariables>;
   operationName: string;
 }
-export const listUsersRef: ListUsersRef;
+export const createNewBinderRef: CreateNewBinderRef;
 
-export function listUsers(options?: ExecuteQueryOptions): QueryPromise<ListUsersData, undefined>;
-export function listUsers(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListUsersData, undefined>;
+export function createNewBinder(vars: CreateNewBinderVariables): MutationPromise<CreateNewBinderData, CreateNewBinderVariables>;
+export function createNewBinder(dc: DataConnect, vars: CreateNewBinderVariables): MutationPromise<CreateNewBinderData, CreateNewBinderVariables>;
 
-interface ListUserReviewsRef {
+interface GetCardDetailsRef {
   /* Allow users to create refs without passing in DataConnect */
-  (): QueryRef<ListUserReviewsData, undefined>;
+  (vars: GetCardDetailsVariables): QueryRef<GetCardDetailsData, GetCardDetailsVariables>;
   /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect): QueryRef<ListUserReviewsData, undefined>;
+  (dc: DataConnect, vars: GetCardDetailsVariables): QueryRef<GetCardDetailsData, GetCardDetailsVariables>;
   operationName: string;
 }
-export const listUserReviewsRef: ListUserReviewsRef;
+export const getCardDetailsRef: GetCardDetailsRef;
 
-export function listUserReviews(options?: ExecuteQueryOptions): QueryPromise<ListUserReviewsData, undefined>;
-export function listUserReviews(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListUserReviewsData, undefined>;
+export function getCardDetails(vars: GetCardDetailsVariables, options?: ExecuteQueryOptions): QueryPromise<GetCardDetailsData, GetCardDetailsVariables>;
+export function getCardDetails(dc: DataConnect, vars: GetCardDetailsVariables, options?: ExecuteQueryOptions): QueryPromise<GetCardDetailsData, GetCardDetailsVariables>;
 
-interface GetMovieByIdRef {
+interface AddCardToUserCollectionRef {
   /* Allow users to create refs without passing in DataConnect */
-  (vars: GetMovieByIdVariables): QueryRef<GetMovieByIdData, GetMovieByIdVariables>;
+  (vars: AddCardToUserCollectionVariables): MutationRef<AddCardToUserCollectionData, AddCardToUserCollectionVariables>;
   /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: GetMovieByIdVariables): QueryRef<GetMovieByIdData, GetMovieByIdVariables>;
+  (dc: DataConnect, vars: AddCardToUserCollectionVariables): MutationRef<AddCardToUserCollectionData, AddCardToUserCollectionVariables>;
   operationName: string;
 }
-export const getMovieByIdRef: GetMovieByIdRef;
+export const addCardToUserCollectionRef: AddCardToUserCollectionRef;
 
-export function getMovieById(vars: GetMovieByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetMovieByIdData, GetMovieByIdVariables>;
-export function getMovieById(dc: DataConnect, vars: GetMovieByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetMovieByIdData, GetMovieByIdVariables>;
-
-interface SearchMovieRef {
-  /* Allow users to create refs without passing in DataConnect */
-  (vars?: SearchMovieVariables): QueryRef<SearchMovieData, SearchMovieVariables>;
-  /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars?: SearchMovieVariables): QueryRef<SearchMovieData, SearchMovieVariables>;
-  operationName: string;
-}
-export const searchMovieRef: SearchMovieRef;
-
-export function searchMovie(vars?: SearchMovieVariables, options?: ExecuteQueryOptions): QueryPromise<SearchMovieData, SearchMovieVariables>;
-export function searchMovie(dc: DataConnect, vars?: SearchMovieVariables, options?: ExecuteQueryOptions): QueryPromise<SearchMovieData, SearchMovieVariables>;
+export function addCardToUserCollection(vars: AddCardToUserCollectionVariables): MutationPromise<AddCardToUserCollectionData, AddCardToUserCollectionVariables>;
+export function addCardToUserCollection(dc: DataConnect, vars: AddCardToUserCollectionVariables): MutationPromise<AddCardToUserCollectionData, AddCardToUserCollectionVariables>;
 

@@ -58,7 +58,11 @@ export default function SettingsPage() {
       const effectiveUserId = user?.uid || userId || getCachedUserId();
       if (effectiveUserId) {
         const profileList = await listProfiles(effectiveUserId);
-        setCachedProfiles(profileList || []);
+        const mappedProfiles = (profileList || []).map(p => ({
+          ...p,
+          id: p.id.toString()
+        }));
+        setCachedProfiles(mappedProfiles);
       }
     } catch (e) {
       console.error("Sync error:", e);
@@ -80,20 +84,27 @@ export default function SettingsPage() {
       </header>
 
       <div className="space-y-8">
+        {/* User Status Card */}
+        <div className="bg-slate-900 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10">
+             <User size={80} />
+          </div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">Active Session</p>
+          <h2 className="text-lg font-black truncate">{user?.email || 'Guest User'}</h2>
+          <div className="mt-4 flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-red-400'}`} />
+            <span className="text-[10px] font-bold uppercase tracking-tight text-slate-400">{isOnline ? 'Nexus Online' : 'Offline Mode'}</span>
+          </div>
+        </div>
+
         <div className="space-y-4">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4">Core Management</h3>
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-5">Core Management</h3>
           <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-50">
             <SettingsLink 
-              href="/settings/profile" 
-              icon={<User size={18} className="text-blue-500" />} 
-              title="My Profile" 
-              subtitle="User details and authentication" 
-            />
-            <SettingsLink 
               href="/settings/profiles" 
-              icon={<Users size={18} className="text-amber-500" />} 
-              title="Profiles" 
-              subtitle="Switch accounts and inventories" 
+              icon={<User size={18} className="text-blue-500" />} 
+              title="Account & Binders" 
+              subtitle="User details and inventory profiles" 
             />
             <SettingsAction 
               onClick={syncMasterData} 
@@ -113,7 +124,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4">App Preferences</h3>
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-5">App Preferences</h3>
           <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-50">
             <SettingsLink 
               href="/settings/display" 

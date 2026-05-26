@@ -1,8 +1,5 @@
 {
   "projects": {
-    "y": "scanner-e7e1f",
     "default": "scanner-e7e1f"
-  },
-  "targets": {},
-  "etags": {}
+  }
 }

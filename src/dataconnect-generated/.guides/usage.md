@@ -12,26 +12,24 @@ For each operation, there is a wrapper hook that can be used to call the operati
 
 Here are all of the hooks that get generated:
 ```ts
-import { useCreateMovie, useUpsertUser, useAddReview, useDeleteReview, useListMovies, useListUsers, useListUserReviews, useGetMovieById, useSearchMovie } from '@dataconnect/generated/react';
+import { useCreateCard, useUpsertUser, useAddCardToInventory, useRemoveCardFromInventory, useGetMyBinders, useCreateNewBinder, useGetCardDetails, useAddCardToUserCollection } from '@dataconnect/generated/react';
 // The types of these hooks are available in react/index.d.ts
 
-const { data, isPending, isSuccess, isError, error } = useCreateMovie(createMovieVars);
+const { data, isPending, isSuccess, isError, error } = useCreateCard(createCardVars);
 
 const { data, isPending, isSuccess, isError, error } = useUpsertUser(upsertUserVars);
 
-const { data, isPending, isSuccess, isError, error } = useAddReview(addReviewVars);
+const { data, isPending, isSuccess, isError, error } = useAddCardToInventory(addCardToInventoryVars);
 
-const { data, isPending, isSuccess, isError, error } = useDeleteReview(deleteReviewVars);
+const { data, isPending, isSuccess, isError, error } = useRemoveCardFromInventory(removeCardFromInventoryVars);
 
-const { data, isPending, isSuccess, isError, error } = useListMovies();
+const { data, isPending, isSuccess, isError, error } = useGetMyBinders();
 
-const { data, isPending, isSuccess, isError, error } = useListUsers();
+const { data, isPending, isSuccess, isError, error } = useCreateNewBinder(createNewBinderVars);
 
-const { data, isPending, isSuccess, isError, error } = useListUserReviews();
+const { data, isPending, isSuccess, isError, error } = useGetCardDetails(getCardDetailsVars);
 
-const { data, isPending, isSuccess, isError, error } = useGetMovieById(getMovieByIdVars);
-
-const { data, isPending, isSuccess, isError, error } = useSearchMovie(searchMovieVars);
+const { data, isPending, isSuccess, isError, error } = useAddCardToUserCollection(addCardToUserCollectionVars);
 
 ```
 
@@ -70,35 +68,32 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { createMovie, upsertUser, addReview, deleteReview, listMovies, listUsers, listUserReviews, getMovieById, searchMovie } from '@dataconnect/generated';
+import { createCard, upsertUser, addCardToInventory, removeCardFromInventory, getMyBinders, createNewBinder, getCardDetails, addCardToUserCollection } from '@dataconnect/generated';
 
 
-// Operation CreateMovie:  For variables, look at type CreateMovieVars in ../index.d.ts
-const { data } = await CreateMovie(dataConnect, createMovieVars);
+// Operation CreateCard:  For variables, look at type CreateCardVars in ../index.d.ts
+const { data } = await CreateCard(dataConnect, createCardVars);
 
 // Operation UpsertUser:  For variables, look at type UpsertUserVars in ../index.d.ts
 const { data } = await UpsertUser(dataConnect, upsertUserVars);
 
-// Operation AddReview:  For variables, look at type AddReviewVars in ../index.d.ts
-const { data } = await AddReview(dataConnect, addReviewVars);
+// Operation AddCardToInventory:  For variables, look at type AddCardToInventoryVars in ../index.d.ts
+const { data } = await AddCardToInventory(dataConnect, addCardToInventoryVars);
 
-// Operation DeleteReview:  For variables, look at type DeleteReviewVars in ../index.d.ts
-const { data } = await DeleteReview(dataConnect, deleteReviewVars);
+// Operation RemoveCardFromInventory:  For variables, look at type RemoveCardFromInventoryVars in ../index.d.ts
+const { data } = await RemoveCardFromInventory(dataConnect, removeCardFromInventoryVars);
 
-// Operation ListMovies: 
-const { data } = await ListMovies(dataConnect);
+// Operation GetMyBinders: 
+const { data } = await GetMyBinders(dataConnect);
 
-// Operation ListUsers: 
-const { data } = await ListUsers(dataConnect);
+// Operation CreateNewBinder:  For variables, look at type CreateNewBinderVars in ../index.d.ts
+const { data } = await CreateNewBinder(dataConnect, createNewBinderVars);
 
-// Operation ListUserReviews: 
-const { data } = await ListUserReviews(dataConnect);
+// Operation GetCardDetails:  For variables, look at type GetCardDetailsVars in ../index.d.ts
+const { data } = await GetCardDetails(dataConnect, getCardDetailsVars);
 
-// Operation GetMovieById:  For variables, look at type GetMovieByIdVars in ../index.d.ts
-const { data } = await GetMovieById(dataConnect, getMovieByIdVars);
-
-// Operation SearchMovie:  For variables, look at type SearchMovieVars in ../index.d.ts
-const { data } = await SearchMovie(dataConnect, searchMovieVars);
+// Operation AddCardToUserCollection:  For variables, look at type AddCardToUserCollectionVars in ../index.d.ts
+const { data } = await AddCardToUserCollection(dataConnect, addCardToUserCollectionVars);
 
 
 ```

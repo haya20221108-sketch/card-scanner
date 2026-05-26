@@ -1,25 +1,20 @@
-import { queryRef, executeQuery, validateArgsWithOptions, mutationRef, executeMutation, validateArgs, makeMemoryCacheProvider } from 'firebase/data-connect';
+import { queryRef, executeQuery, validateArgsWithOptions, mutationRef, executeMutation, validateArgs } from 'firebase/data-connect';
 
 export const connectorConfig = {
   connector: 'example',
   service: 'card-scanner-1',
   location: 'us-east4'
 };
-export const dataConnectSettings = {
-  cacheSettings: {
-    cacheProvider: makeMemoryCacheProvider()
-  }
-};
-export const createMovieRef = (dcOrVars, vars) => {
+export const createCardRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'CreateMovie', inputVars);
+  return mutationRef(dcInstance, 'CreateCard', inputVars);
 }
-createMovieRef.operationName = 'CreateMovie';
+createCardRef.operationName = 'CreateCard';
 
-export function createMovie(dcOrVars, vars) {
+export function createCard(dcOrVars, vars) {
   const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
-  return executeMutation(createMovieRef(dcInstance, inputVars));
+  return executeMutation(createCardRef(dcInstance, inputVars));
 }
 
 export const upsertUserRef = (dcOrVars, vars) => {
@@ -34,92 +29,77 @@ export function upsertUser(dcOrVars, vars) {
   return executeMutation(upsertUserRef(dcInstance, inputVars));
 }
 
-export const addReviewRef = (dcOrVars, vars) => {
+export const addCardToInventoryRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'AddReview', inputVars);
+  return mutationRef(dcInstance, 'AddCardToInventory', inputVars);
 }
-addReviewRef.operationName = 'AddReview';
+addCardToInventoryRef.operationName = 'AddCardToInventory';
 
-export function addReview(dcOrVars, vars) {
+export function addCardToInventory(dcOrVars, vars) {
   const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
-  return executeMutation(addReviewRef(dcInstance, inputVars));
+  return executeMutation(addCardToInventoryRef(dcInstance, inputVars));
 }
 
-export const deleteReviewRef = (dcOrVars, vars) => {
+export const removeCardFromInventoryRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
-  return mutationRef(dcInstance, 'DeleteReview', inputVars);
+  return mutationRef(dcInstance, 'RemoveCardFromInventory', inputVars);
 }
-deleteReviewRef.operationName = 'DeleteReview';
+removeCardFromInventoryRef.operationName = 'RemoveCardFromInventory';
 
-export function deleteReview(dcOrVars, vars) {
+export function removeCardFromInventory(dcOrVars, vars) {
   const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
-  return executeMutation(deleteReviewRef(dcInstance, inputVars));
+  return executeMutation(removeCardFromInventoryRef(dcInstance, inputVars));
 }
 
-export const listMoviesRef = (dc) => {
+export const getMyBindersRef = (dc) => {
   const { dc: dcInstance} = validateArgs(connectorConfig, dc, undefined);
   dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'ListMovies');
+  return queryRef(dcInstance, 'GetMyBinders');
 }
-listMoviesRef.operationName = 'ListMovies';
+getMyBindersRef.operationName = 'GetMyBinders';
 
-export function listMovies(dcOrOptions, options) {
+export function getMyBinders(dcOrOptions, options) {
   
   const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrOptions, options, undefined,false, false);
-  return executeQuery(listMoviesRef(dcInstance, inputVars), inputOpts && inputOpts.fetchPolicy);
+  return executeQuery(getMyBindersRef(dcInstance, inputVars), inputOpts && inputOpts.fetchPolicy);
 }
 
-export const listUsersRef = (dc) => {
-  const { dc: dcInstance} = validateArgs(connectorConfig, dc, undefined);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'ListUsers');
-}
-listUsersRef.operationName = 'ListUsers';
-
-export function listUsers(dcOrOptions, options) {
-  
-  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrOptions, options, undefined,false, false);
-  return executeQuery(listUsersRef(dcInstance, inputVars), inputOpts && inputOpts.fetchPolicy);
-}
-
-export const listUserReviewsRef = (dc) => {
-  const { dc: dcInstance} = validateArgs(connectorConfig, dc, undefined);
-  dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'ListUserReviews');
-}
-listUserReviewsRef.operationName = 'ListUserReviews';
-
-export function listUserReviews(dcOrOptions, options) {
-  
-  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrOptions, options, undefined,false, false);
-  return executeQuery(listUserReviewsRef(dcInstance, inputVars), inputOpts && inputOpts.fetchPolicy);
-}
-
-export const getMovieByIdRef = (dcOrVars, vars) => {
+export const createNewBinderRef = (dcOrVars, vars) => {
   const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'GetMovieById', inputVars);
+  return mutationRef(dcInstance, 'CreateNewBinder', inputVars);
 }
-getMovieByIdRef.operationName = 'GetMovieById';
+createNewBinderRef.operationName = 'CreateNewBinder';
 
-export function getMovieById(dcOrVars, varsOrOptions, options) {
+export function createNewBinder(dcOrVars, vars) {
+  const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
+  return executeMutation(createNewBinderRef(dcInstance, inputVars));
+}
+
+export const getCardDetailsRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
+  dcInstance._useGeneratedSdk();
+  return queryRef(dcInstance, 'GetCardDetails', inputVars);
+}
+getCardDetailsRef.operationName = 'GetCardDetails';
+
+export function getCardDetails(dcOrVars, varsOrOptions, options) {
   
   const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrVars, varsOrOptions, options, true, true);
-  return executeQuery(getMovieByIdRef(dcInstance, inputVars), inputOpts && inputOpts.fetchPolicy);
+  return executeQuery(getCardDetailsRef(dcInstance, inputVars), inputOpts && inputOpts.fetchPolicy);
 }
 
-export const searchMovieRef = (dcOrVars, vars) => {
-  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars);
+export const addCardToUserCollectionRef = (dcOrVars, vars) => {
+  const { dc: dcInstance, vars: inputVars} = validateArgs(connectorConfig, dcOrVars, vars, true);
   dcInstance._useGeneratedSdk();
-  return queryRef(dcInstance, 'SearchMovie', inputVars);
+  return mutationRef(dcInstance, 'AddCardToUserCollection', inputVars);
 }
-searchMovieRef.operationName = 'SearchMovie';
+addCardToUserCollectionRef.operationName = 'AddCardToUserCollection';
 
-export function searchMovie(dcOrVars, varsOrOptions, options) {
-  
-  const { dc: dcInstance, vars: inputVars, options: inputOpts } = validateArgsWithOptions(connectorConfig, dcOrVars, varsOrOptions, options, true, false);
-  return executeQuery(searchMovieRef(dcInstance, inputVars), inputOpts && inputOpts.fetchPolicy);
+export function addCardToUserCollection(dcOrVars, vars) {
+  const { dc: dcInstance, vars: inputVars } = validateArgs(connectorConfig, dcOrVars, vars, true);
+  return executeMutation(addCardToUserCollectionRef(dcInstance, inputVars));
 }
 

@@ -7,15 +7,16 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { resolveCardDisplay } from '../components/utils';
 import { supabase } from '../supabase';
-import { listProfiles } from '../profileStore';
+import { ensureProfiles } from '../profileStore';
 import {
   getCachedMasterData,
   getCachedProfiles,
   getCachedRawCollection,
   getCachedUserId,
+  getDbBackedProfiles,
   getOnlineStatus,
   rememberUserId,
-  normalizeProfileId,
+  normalizePUid,
   setCachedProfiles,
   setCachedRawCollection,
 } from '../offline';
@@ -29,7 +30,16 @@ export default function HomePage() {
   const [stats, setStats] = useState({ total: 0, byRank: [0, 0, 0, 0, 0, 0] });
   const [recentCards, setRecentCards] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
-  const [activeProfileId, setActiveProfileId] = useState<string | null>('all');
+  const dbProfiles = useMemo(() => getDbBackedProfiles(profiles), [profiles]);
+  const [activePUid, setActivePUid] = useState<string | null>('all');
+
+  useEffect(() => {
+    if (!activePUid || activePUid === 'all') return;
+    if (!dbProfiles.some((p) => p.id === activePUid)) {
+      setActivePUid('all');
+      localStorage.removeItem('active_profile_id');
+    }
+  }, [activePUid, dbProfiles]);
   const [masterMap, setMasterMap] = useState<Map<string, any>>(new Map());
   const [userId, setUserId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
@@ -57,16 +67,22 @@ export default function HomePage() {
 
       let profileList = getCachedProfiles();
       if (isCurrentlyOnline && user?.uid) {
-        const freshProfiles = await listProfiles(user.uid);
+        const freshProfiles = await ensureProfiles(user.uid);
         profileList = freshProfiles;
         setCachedProfiles(freshProfiles);
 
         const { data: freshCollection } = await supabase
-          .from('collections')
-          .select('card_id, profile_id, quantity')
-          .eq('user_id', user.uid);
+          .from('inventory')
+          .select('card_id, p_uid, count')
+          .in('p_uid', freshProfiles.map(p => p.id));
+
         if (freshCollection) {
-          setCachedRawCollection(freshCollection.map((record: any) => ({ ...record, user_id: user.uid })));
+          setCachedRawCollection(freshCollection.map((record: any) => ({ 
+            card_id: record.card_id,
+            p_uid: record.p_uid,
+            quantity: record.count, 
+            user_id: user.uid 
+          })));
         }
       }
       
@@ -75,9 +91,9 @@ export default function HomePage() {
 
       const savedId = localStorage.getItem('active_profile_id');
       if (savedId && profileList.some(p => p.id === savedId)) {
-        setActiveProfileId(savedId);
+        setActivePUid(savedId);
       } else if (profileList.length > 0) {
-        setActiveProfileId('all');
+        setActivePUid('all');
       }
     };
 
@@ -105,7 +121,7 @@ export default function HomePage() {
       
       data = getCachedRawCollection().filter((item: any) => {
         const sameUser = String(item.user_id || userId) === userId;
-        const matchesProfile = activeProfileId === 'all' || normalizeProfileId(item.profile_id) === normalizeProfileId(activeProfileId);
+        const matchesProfile = activePUid === 'all' || normalizePUid(item.p_uid) === normalizePUid(activePUid);
         return sameUser && matchesProfile;
       });
 
@@ -124,7 +140,7 @@ export default function HomePage() {
 
     fetchStats();
     return () => { isMounted = false; };
-  }, [userId, activeProfileId, masterMap, isOnline, hasMounted]);
+  }, [userId, activePUid, masterMap, isOnline, hasMounted]);
 
   if (!hasMounted) return null;
 
@@ -136,7 +152,7 @@ export default function HomePage() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-black italic text-slate-900 uppercase tracking-tighter">Dashboard</h1>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inventory Intelligence</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Inventory Overview</p>
           </div>
           <div className="w-10 h-10 bg-white rounded-2xl border border-slate-100 flex items-center justify-center shadow-sm relative">
             <Award size={20} className="text-amber-500" />
@@ -145,11 +161,11 @@ export default function HomePage() {
         </div>
 
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-          <button onClick={() => { setActiveProfileId('all'); localStorage.removeItem('active_profile_id'); }} className={`flex-shrink-0 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeProfileId === 'all' ? 'bg-slate-900 text-white' : 'bg-white text-slate-400 border border-slate-100'}`}>
+          <button onClick={() => setActivePUid('all')} className={`flex-shrink-0 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activePUid === 'all' ? 'bg-slate-900 text-white' : 'bg-white text-slate-400 border border-slate-100'}`}>
             All Binder
           </button>
-          {profiles.map(p => (
-            <button key={p.id} onClick={() => { setActiveProfileId(p.id); localStorage.setItem('active_profile_id', p.id); }} className={`flex-shrink-0 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeProfileId === p.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-400 border border-slate-100'}`}>
+          {dbProfiles.map(p => (
+            <button key={p.id} onClick={() => setActivePUid(p.id)} className={`flex-shrink-0 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activePUid === p.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-400 border border-slate-100'}`}>
               {p.display_name || 'Unnamed'}
             </button>
           ))}

@@ -5,12 +5,24 @@ const API_KEY_ROBO = process.env.NEXT_PUBLIC_ROBOFLOW_API_KEY;
 const PROJECT_CARD = process.env.NEXT_PUBLIC_ROBOFLOW_PROJECT_CARD;
 const PROJECT_STAR = process.env.NEXT_PUBLIC_ROBOFLOW_PROJECT_STAR;
 
+async function fetchWithTimeout(input: RequestInfo, init: RequestInit = {}, timeoutMs = 25000) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(input, { ...init, signal: controller.signal });
+    return response;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export async function analyzeCard(base64Image: string, masterData: any[]) {
   let worker;
   try {
-    const cardResponse = await fetch(`https://detect.roboflow.com/${PROJECT_CARD}?api_key=${API_KEY_ROBO}`, {
-      method: "POST", body: base64Image.split(',')[1],
-      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+    const cardResponse = await fetchWithTimeout(`https://detect.roboflow.com/${PROJECT_CARD}?api_key=${API_KEY_ROBO}`, {
+      method: 'POST',
+      body: base64Image.split(',')[1],
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
     const cardData = await cardResponse.json();
     if (!cardData.predictions || cardData.predictions.length === 0) return [];
@@ -23,9 +35,10 @@ export async function analyzeCard(base64Image: string, masterData: any[]) {
       const fullCanvas = await cropImageSimple(base64Image, card);
       const photoCardImage = fullCanvas.toDataURL("image/png");
 
-      const starResponse = await fetch(`https://detect.roboflow.com/${PROJECT_STAR}?api_key=${API_KEY_ROBO}`, {
-        method: "POST", body: photoCardImage.split(',')[1],
-        headers: { "Content-Type": "application/x-www-form-urlencoded" }
+      const starResponse = await fetchWithTimeout(`https://detect.roboflow.com/${PROJECT_STAR}?api_key=${API_KEY_ROBO}`, {
+        method: 'POST',
+        body: photoCardImage.split(',')[1],
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
       const starData = await starResponse.json();
       const aiDetectedStars = starData.predictions ? starData.predictions.filter((p: any) => p.class === "star").length : 0;

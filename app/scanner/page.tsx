@@ -1,28 +1,38 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { analyzeCard } from './utils';
 import Image from 'next/image';
 import { resolveCardDisplay } from '../components/utils';
 import { supabase } from '../supabase';
-import { listProfiles } from '../profileStore';
+import { ensureProfiles } from '../profileStore';
 import {
   addCustomMasterCards,
-  getActiveProfileId,
+  getActivePUid,
   getCachedMasterData,
   getCachedProfiles,
   getCachedRawCollection,
   getCachedUserId,
   getOnlineStatus,
-  normalizeProfileId,
+  normalizePUid,
   queueCollectionChange,
   rememberUserId,
   setCachedMasterData,
   setCachedProfiles,
   upsertCachedCollection,
 } from '../offline';
+
+const fetchWithTimeout = async (input: RequestInfo, init: RequestInit = {}, timeoutMs = 20000) => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
 import { CustomAlert } from '../components/CustomAlert';
 import { useAuth } from '../../AuthContext';
 import {
@@ -62,7 +72,7 @@ export default function ScannerPage() {
   const [masterData, setMasterData] = useState<any[]>([]);
   const [isAllSaved, setIsAllSaved] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
-  const [activeProfileId, setActiveProfileIdState] = useState<string | null>(null);
+  const [activePUid, setActivePUidState] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [hasMounted, setHasMounted] = useState(false);
   const [selectedResultIndex, setSelectedResultIndex] = useState<number | null>(null); // 候補選択用
@@ -93,18 +103,24 @@ export default function ScannerPage() {
   };
 
   const [customAlert, setCustomAlert] = useState<string | null>(null);
+  const hasProfiles = profiles.length > 0;
+  const canUseAiScan = Boolean(
+    process.env.NEXT_PUBLIC_ROBOFLOW_API_KEY &&
+    process.env.NEXT_PUBLIC_ROBOFLOW_PROJECT_CARD &&
+    process.env.NEXT_PUBLIC_ROBOFLOW_PROJECT_STAR
+  );
 
   const activeProfileName = useMemo(() => {
-    if (!activeProfileId) return 'Default';
-    return profiles.find((profile) => String(profile.id) === String(activeProfileId))?.display_name || 'Active';
-  }, [activeProfileId, profiles]);
+    if (!activePUid) return 'Default';
+    return profiles.find((profile) => String(profile.id) === String(activePUid))?.display_name || 'Active';
+  }, [activePUid, profiles]);
 
   useEffect(() => {
     setHasMounted(true);
     const cached = getCachedMasterData();
     setMasterData(cached);
     setProfiles(getCachedProfiles());
-    setActiveProfileIdState(getActiveProfileId());
+    setActivePUidState(getActivePUid());
     setIsOnline(getOnlineStatus());
 
     const handleOnline = () => setIsOnline(true);
@@ -119,15 +135,23 @@ export default function ScannerPage() {
       if (!getOnlineStatus()) return;
       try {
         if (userId) {
-          const profileList = await listProfiles(userId);
-          setCachedProfiles(profileList);
-          setProfiles(profileList);
-          if (!getActiveProfileId() && profileList[0]?.id) {
-            setActiveProfileIdState(profileList[0].id);
+          try {
+            const profileList = await ensureProfiles(userId);
+            setCachedProfiles(profileList);
+            setProfiles(profileList);
+            const savedUid = getActivePUid();
+            const nextProfileId = savedUid && profileList.some((profile) => profile.id === savedUid)
+              ? savedUid
+              : profileList[0]?.id;
+            if (nextProfileId) {
+              setActivePUidState(nextProfileId);
+            }
+          } catch (error) {
+            console.error('Profile sync failed:', error);
           }
         }
 
-        const res = await fetch(CONFIG.gasUrl);
+        const res = await fetchWithTimeout(CONFIG.gasUrl);
         const data = await res.json();
         const filtered = data.filter((card: any) => card.name && !['名前', 'name'].includes(card.name.toLowerCase()));
         setCachedMasterData(filtered);
@@ -154,6 +178,30 @@ export default function ScannerPage() {
       return () => clearTimeout(timer); // クリーンアップ
     }
   }, [customAlert]);
+
+  const syncMasterData = async () => {
+    if (!getOnlineStatus()) {
+      showAlert('Offline Mode', 'オンライン時にカードデータを同期してください。', 'info');
+      return;
+    }
+
+    setLoading(true);
+    setStatus('カードデータ同期中...');
+    try {
+      const res = await fetchWithTimeout(CONFIG.gasUrl);
+      const data = await res.json();
+      const filtered = data.filter((card: any) => card.name && !['名前', 'name'].includes(String(card.name).toLowerCase()));
+      setCachedMasterData(filtered);
+      setMasterData(getCachedMasterData());
+      showAlert('同期完了', 'カードデータを同期しました。', 'success');
+    } catch (error) {
+      console.error('Master sync failed:', error);
+      showAlert('Sync Error', 'カードデータの同期に失敗しました。', 'error');
+    } finally {
+      setLoading(false);
+      setStatus('待機中');
+    }
+  };
 
   const updateResult = (index: number, field: string, value: any, closeEditModal: boolean = false) => {
     const next = [...results];
@@ -230,11 +278,12 @@ export default function ScannerPage() {
         id: `manual-${Date.now()}`,
         name: '',
         group: '',
-        pack: 'その他',
+        pack: '',
         stars: 0,
         quantity: 1,
         croppedImg: '',
         date: Date.now(),
+        p_uid: activePUid || profiles[0]?.id || null,
       },
     ]);
     setIsAllSaved(false);
@@ -254,6 +303,14 @@ export default function ScannerPage() {
 
   const handleBatchScan = async () => {
     if (images.length === 0 || loading) return;
+    if (!hasProfiles) {
+      showAlert('アカウントがありません', '設定 > Profiles でアプリ内アカウントを作成してください。', 'error');
+      return;
+    }
+    if (!canUseAiScan) {
+      showAlert('AI解析は設定不足', 'Roboflow の環境変数が未設定です。手動追加を使用してください。', 'info');
+      return;
+    }
     if (!isOnline) {
       showAlert('Offline Mode', 'オフライン中は手動追加を使えます。AI解析はオンライン復帰後に実行できます。', 'info');
       return;
@@ -264,44 +321,49 @@ export default function ScannerPage() {
     }
 
     setLoading(true);
+    setStatus('カード解析中...');
     setProgress(0);
     setIsAllSaved(false);
     let allResults: any[] = [];
 
-    // Promise.all を使用して並行処理
-    const analysisPromises = images.map((img, i) => {
-      setStatus(`${i + 1}枚目を解析中...`); // ステータスは更新するが、個別のsetStatusはanalyzeCardから削除
-      return analyzeCard(img, masterData);
-    });
-    const resultsPerImage = await Promise.all(analysisPromises);
-    allResults = resultsPerImage.flat().map((item: any) => ({ ...item, quantity: 1 }));
+    try {
+      const resultsPerImage: any[][] = [];
+      for (let i = 0; i < images.length; i += 1) {
+        setStatus(`${i + 1}/${images.length}枚目を解析中...`);
+        const parsed = await analyzeCard(images[i], masterData);
+        resultsPerImage.push(parsed);
+        setProgress(Math.round(((i + 1) / images.length) * 100));
+      }
+      allResults = resultsPerImage.flat().map((item: any) => ({ ...item, quantity: 1 }));
 
-    setResults((prev) => {
-      const consolidatedResults = new Map<string, any>();
-      // 既存の結果をマップにロード
-      prev.forEach(res => consolidatedResults.set(res.id, { ...res }));
-
-      // 新しい結果を処理し、既存のカードの枚数を増やすか、新しいカードを追加
-      allResults.forEach(newCard => {
-        if (consolidatedResults.has(newCard.id)) {
-          consolidatedResults.get(newCard.id).quantity += newCard.quantity;
-        } else {
-          consolidatedResults.set(newCard.id, { ...newCard });
-        }
+      setResults((prev) => {
+        const consolidatedResults = new Map<string, any>();
+        prev.forEach(res => consolidatedResults.set(res.id, { ...res }));
+        allResults.forEach(newCard => {
+          if (consolidatedResults.has(newCard.id)) {
+            consolidatedResults.get(newCard.id).quantity += newCard.quantity;
+          } else {
+            consolidatedResults.set(newCard.id, { ...newCard });
+          }
+        });
+        return Array.from(consolidatedResults.values());
       });
-      return Array.from(consolidatedResults.values());
-    });
-    setImages([]);
-    setLoading(false);
-    setStatus('完了');
-    
-    if (allResults.length === 0) {
-      showAlert('Result', 'カードを検出できませんでした。角度を変えて撮り直すか、手動追加してください。', 'info');
-    } else {
-      setCustomAlert(`${allResults.length}件を解析しました。`);
-    }
+      setImages([]);
 
-    window.scrollTo({ top: 320, behavior: 'smooth' });
+      if (allResults.length === 0) {
+        showAlert('Result', 'カードを検出できませんでした。角度を変えて撮り直すか、手動追加してください。', 'info');
+      } else {
+        setCustomAlert(`${allResults.length}件を解析しました。`);
+      }
+
+      window.scrollTo({ top: 320, behavior: 'smooth' });
+    } catch (error) {
+      console.error('Batch scan failed:', error);
+      showAlert('解析エラー', '写真解析に失敗しました。再度お試しください。', 'error');
+    } finally {
+      setLoading(false);
+      setStatus('待機中');
+    }
   };
 
   const openEditDetailsModal = (index: number) => {
@@ -311,14 +373,17 @@ export default function ScannerPage() {
   };
 
   const saveAllCards = async () => {
-    // カード名未入力、またはIDがmanual-（DB未一致）のカードをチェック
-    const invalidCards = results.filter(r => !r.name || String(r.id).startsWith('manual-'));
+    const invalidCards = results.filter(r => !r.name);
     if (invalidCards.length > 0) {
-      showAlert('保存できません', `データベースに一致しないカードが${invalidCards.length}件あります。正しい候補を選択するか削除してください。`, 'error');
+      showAlert('保存できません', `カード名が未入力のカードが${invalidCards.length}件あります。`, 'error');
       return;
     }
     if (results.length === 0) {
       showAlert('カードなし', '保存するカードがありません。', 'info');
+      return;
+    }
+    if (!hasProfiles || results.some((r) => !normalizePUid(r.p_uid || activePUid))) {
+      showAlert('アカウントを選択', '保存先のアプリ内アカウントを選択してください。', 'error');
       return;
     }
     showAlert('保存の確認', `${results.length}件のカードをバインダーに保存しますか？`, 'info', executeSaveConfirmed, closeAlert);
@@ -326,62 +391,101 @@ export default function ScannerPage() {
 
   const executeSaveConfirmed = async () => {
     closeAlert();
-    // 保存前に再度バリデーション（DB未一致が混入していないか）
-    if (results.some(r => !r.name || String(r.id).startsWith('manual-'))) return;
+    if (results.some(r => !r.name)) return;
     if (results.length === 0) return;
 
     setLoading(true);
-    const sessionUserId = user?.uid || null;
-    rememberUserId(sessionUserId);
-    const userId = sessionUserId || getCachedUserId() || 'offline-user';
-    let queued = 0;
-    let saved = 0;
+    setStatus('保存中...');
+    try {
+      const sessionUserId = user?.uid || null;
+      rememberUserId(sessionUserId);
+      const userId = sessionUserId || getCachedUserId() || 'offline-user';
+      let queued = 0;
+      let saved = 0;
+      const customCards = results
+        .filter((result) => String(result.id || '').startsWith('manual-'))
+        .map((result) => ({
+          id: `custom-${String(result.id).replace(/^manual-/, '')}`,
+          name: result.name,
+          pack: result.pack || 'カスタム',
+          rank: Number(result.stars ?? result.rank ?? 0),
+          group: result.group || 'custom',
+        }));
 
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i];
-      // DB一致のみ保存
-      if (!result.name || String(result.id).startsWith('manual-')) continue;
-
-      let cardId = String(result.id || '');
-      const profileId = normalizeProfileId(result.profile_id || activeProfileId);
-
-      const cachedRecord = getCachedRawCollection().find((item) => (
-        String(item.card_id) === cardId
-        && normalizeProfileId(item.profile_id) === profileId
-        && (!item.user_id || String(item.user_id) === userId)
-      ));
-      const quantity = (Number(cachedRecord?.quantity) || 0) + Math.max(1, Number(result.quantity) || 1);
-
-      upsertCachedCollection({
-        user_id: userId,
-        profile_id: profileId,
-        card_id: cardId,
-        quantity,
-      });
-      saved += 1;
-
-      if (isOnline && sessionUserId) {
-        try {
-          const { error } = await supabase.from('collections').upsert({
-            user_id: sessionUserId,
-            profile_id: profileId,
-            card_id: cardId,
-            quantity,
-          }, { onConflict: 'user_id,profile_id,card_id' });
-          if (error) throw error;
-        } catch {
-          queued = queueCollectionChange('upsert', { user_id: userId, profile_id: profileId, card_id: cardId, quantity });
-        }
-      } else {
-        queued = queueCollectionChange('upsert', { user_id: userId, profile_id: profileId, card_id: cardId, quantity });
+      if (customCards.length > 0) {
+        addCustomMasterCards(customCards);
+        setMasterData(getCachedMasterData());
       }
-    }
 
-    setLoading(false);
-    setIsAllSaved(true);
-    setImages([]);
-    setResults([]);
-    showAlert('保存完了', '全てのカードをBinderに保存しました。', 'success', () => router.push('/home'));
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        if (!result.name) continue;
+
+        const customCard = customCards.find((card) => card.name === result.name && card.pack === (result.pack || 'カスタム'));
+        let cardId = String(customCard?.id || result.id || '');
+        const pUid = normalizePUid(result.p_uid || activePUid);
+        const addQuantity = Math.max(1, Number(result.quantity) || 1);
+
+        // 必須データの欠落チェック
+        if (!cardId || !pUid) {
+          console.error('Missing cardId or pUid for result:', result);
+          continue;
+        }
+
+        // オンラインなら最新の数値をDBから取得して加算、オフラインならキャッシュから計算
+        let currentCount = 0;
+        if (isOnline && sessionUserId) {
+          const { data: existing } = await supabase
+            .from('inventory')
+            .select('count')
+            .eq('p_uid', pUid)
+            .eq('card_id', cardId)
+            .maybeSingle();
+          currentCount = existing?.count || 0;
+        } else {
+          const cached = getCachedRawCollection().find(item => String(item.card_id) === cardId && normalizePUid(item.p_uid) === pUid);
+          currentCount = Number(cached?.quantity) || 0;
+        }
+
+        const totalQuantity = currentCount + addQuantity;
+
+        upsertCachedCollection({
+          user_id: userId,
+          p_uid: pUid,
+          card_id: cardId,
+          quantity: totalQuantity,
+        });
+        saved += 1;
+
+        if (isOnline && sessionUserId) {
+          try {
+            const { error } = await supabase.from('inventory').upsert({
+              p_uid: pUid,
+              card_id: cardId,
+              count: totalQuantity,
+            }, { onConflict: 'p_uid,card_id' });
+            if (error) throw error;
+          } catch (error) {
+            console.error('Supabase save failed:', error.message || error);
+            showAlert('保存エラー', `カード「${result.name}」の保存に失敗しました。RLS設定を確認してください。`, 'error');
+            queued = queueCollectionChange('upsert', { user_id: userId, p_uid: pUid, card_id: cardId, quantity: totalQuantity });
+          }
+        } else {
+          queued = queueCollectionChange('upsert', { user_id: userId, p_uid: pUid, card_id: cardId, quantity: totalQuantity });
+        }
+      }
+
+      setIsAllSaved(true);
+      setImages([]);
+      setResults([]);
+      showAlert('保存完了', '全てのカードをBinderに保存しました。', 'success', () => router.push('/home'));
+    } catch (error) {
+      console.error('Save confirmed failed:', error);
+      showAlert('保存エラー', 'カードの保存中に問題が発生しました。', 'error');
+    } finally {
+      setLoading(false);
+      setStatus('待機中');
+    }
   };
 
   if (!hasMounted) {
@@ -405,6 +509,13 @@ export default function ScannerPage() {
       </header>
 
       <main className="max-w-md mx-auto p-4 space-y-6">
+        {!hasProfiles && (
+          <Link href="/settings/profiles" className="block bg-amber-50 border border-amber-100 rounded-2xl p-4 text-amber-700">
+            <p className="text-[10px] font-black uppercase tracking-widest">アカウント未設定</p>
+            <p className="text-[10px] font-bold uppercase tracking-tight mt-1">保存先のアプリ内アカウントを作成してください。</p>
+          </Link>
+        )}
+
         <section className="bg-white rounded-[2rem] p-5 shadow-sm border border-slate-100">
           <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
             <label className="flex-shrink-0 w-32 h-40 rounded-2xl border-2 border-dashed border-blue-200 bg-slate-50 flex flex-col items-center justify-center text-blue-600 hover:bg-blue-50 cursor-pointer transition-all active:scale-95">
@@ -431,7 +542,7 @@ export default function ScannerPage() {
             <button
               type="button"
               onClick={handleBatchScan}
-              disabled={images.length === 0 || loading}
+              disabled={images.length === 0 || loading || !canUseAiScan}
               className="py-4 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-100 flex items-center justify-center gap-2 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
             >
               <Sparkles size={16} /> AI解析
@@ -439,15 +550,27 @@ export default function ScannerPage() {
             <button
               type="button"
               onClick={addManualCard}
-              className="py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-slate-100 flex items-center justify-center gap-2 active:scale-95"
+              disabled={!hasProfiles}
+              className="py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-slate-100 flex items-center justify-center gap-2 active:scale-95 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
             >
               <Plus size={16} /> 手動追加
             </button>
           </div>
 
+          {masterData.length === 0 && (
+            <button
+              type="button"
+              onClick={syncMasterData}
+              disabled={loading || !isOnline}
+              className="mt-3 w-full py-3 bg-blue-50 text-blue-600 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-40"
+            >
+              <Layers size={14} /> カードデータ同期
+            </button>
+          )}
+
           {loading && (
             <div className="mt-4">
-              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden shadow-inner">
                 <div className="h-full bg-blue-600 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
               </div>
               <p className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">{status}</p>
@@ -457,11 +580,17 @@ export default function ScannerPage() {
 
         {results.length > 0 ? (
           <section className="space-y-4 animate-in fade-in duration-300">
-            <div className="flex items-center justify-between px-2">
-              <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">候補 ({results.length})</h2>
-              <div className="flex items-center gap-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                <Layers size={12} /> {masterData.length}
-              </div> {/* This div is for masterData.length, not for saving */}
+            <div className="flex items-center justify-between px-3">
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">解析結果</h2>
+                <span className="text-[9px] font-bold text-slate-400">{results.length} 件</span>
+              </div>
+              <button 
+                onClick={() => showAlert('確認', '全ての解析結果を削除しますか？', 'info', () => setResults([]), closeAlert)}
+                className="flex items-center gap-1 text-[9px] font-black text-red-500 uppercase tracking-widest hover:bg-red-50 px-2 py-1 rounded-lg transition-colors"
+              >
+                <Trash2 size={12} /> 全て削除
+              </button>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -472,8 +601,8 @@ export default function ScannerPage() {
                   onRemove={() => removeResult(index)}
                   onClick={() => openEditDetailsModal(index)}
                   profiles={profiles}
-                  activeProfileId={activeProfileId} // Pass active profile for default selection
-                  onProfileChange={(newProfileId) => updateResult(index, 'profile_id', newProfileId)} // Callback for profile change
+                  activeProfileId={activePUid} // Pass active profile for default selection
+                  onProfileChange={(newProfileId) => updateResult(index, 'p_uid', newProfileId)} // Callback for profile change
                 />
               ))}
             </div>
@@ -557,10 +686,7 @@ function ResultEditCard({ data, onRemove, onClick, profiles, activeProfileId, on
   const isIdManual = String(data.id || '').startsWith('manual-');
 
   const getRankDisplay = (rankValue: number) => {
-    if (rankValue <= 1) {
-      return 'その他';
-    }
-    return '★'.repeat(rankValue);
+    return rankValue <= 0 ? 'その他' : rankValue;
   };
 
   return (
@@ -568,76 +694,92 @@ function ResultEditCard({ data, onRemove, onClick, profiles, activeProfileId, on
       role="button"
       tabIndex={0}
       onClick={onClick}
-      className={`group relative flex items-center gap-4 overflow-hidden rounded-2xl border p-4 transition-all duration-300 active:scale-[0.98] cursor-pointer shadow-sm hover:shadow-md animate-in fade-in slide-in-from-bottom-2
+      className={`group relative flex items-center gap-3 overflow-hidden rounded-2xl border p-3 transition-all duration-300 active:scale-[0.98] cursor-pointer shadow-sm hover:shadow-md animate-in fade-in slide-in-from-bottom-2
         ${isIdManual
-          ? 'bg-red-50/50 border-red-200'
-          : 'bg-white border-slate-100'
+          ? 'bg-red-50/30 border-red-200'
+          : 'bg-white border-blue-300'
         }
       `}
     >
+      {/* Left accent line */}
+      {!isIdManual && (
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-400 to-blue-600" />
+      )}
+
       {/* メイン情報 */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <h3 className={`text-xs font-black uppercase leading-tight truncate ${display.isUnknown ? 'text-red-600' : 'text-slate-900'}`}>
+      <div className="flex-1 min-w-0 py-1 pl-1">
+        <div className="flex items-center gap-1.5 mb-1">
+          <h3 className={`text-[11px] font-black uppercase leading-tight truncate ${display.isUnknown ? 'text-red-600' : 'text-slate-900'}`}>
             {isIdManual ? (data.name || 'Unknown Card') : display.name}
           </h3>
-          <div className="bg-blue-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-lg flex-shrink-0">
+          <div className="bg-blue-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-lg flex-shrink-0 shadow-sm">
             x{data.quantity || 1}
           </div>
-          {isIdManual && (
-            <div className="bg-red-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-md flex items-center gap-1">
-              <AlertCircle size={8} /> UNMATCHED
-            </div>
-          )}
         </div>
-        <div className="flex items-center gap-1">
-          <Award size={10} className="text-amber-400" />
-          <span className="text-[10px] font-bold text-amber-500 tracking-widest">
-            {getRankDisplay(data.stars ?? data.rank ?? 0)}
-          </span>
+        
+        <div className="flex flex-col gap-0.5">
+          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest truncate">
+            {data.pack || 'その他'}
+          </p>
+          <div className="flex items-center gap-0.5 text-amber-400">
+            {data.stars > 0 ? (
+              Array.from({ length: Math.max(0, Math.min(5, data.stars || 0)) }).map((_, i) => (
+                <Star key={i} size={8} fill="currentColor" strokeWidth={0} />
+              ))
+            ) : (
+              <span className="text-[8px] font-black text-slate-400 uppercase">その他</span>
+            )}
+          </div>
         </div>
+        
+        {isIdManual && (
+          <div className="mt-1.5 inline-flex bg-red-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded flex items-center gap-1 shadow-sm">
+            <AlertCircle size={8} /> UNMATCHED
+          </div>
+        )}
       </div>
 
-      {/* アクション/アカウント選択 */}
-      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-        {profiles.length > 1 && ( // プロフィールが複数ある場合のみ切り替えボタンを表示
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              const currentProfileIndex = profiles.findIndex(p => String(p.id) === String(data.profile_id || activeProfileId));
-              const nextProfileIndex = (currentProfileIndex + 1) % profiles.length;
-              onProfileChange(profiles[nextProfileIndex].id);
-            }}
-            className="p-2 bg-slate-100 text-slate-500 rounded-full hover:bg-slate-200 transition-colors"
-            title="次のアカウントに切り替え"
-          >
-            <User size={16} />
-          </button>
-        )}
-        <select
-          value={data.profile_id || activeProfileId || ''}
-          onChange={(e) => {
-            e.stopPropagation();
-            onProfileChange(e.target.value);
-          }}
-          className="bg-white text-slate-500 text-[8px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border-none focus:ring-0 appearance-none text-center cursor-pointer hover:bg-slate-100"
-        >
-          {profiles.map(p => (
-            <option key={p.id} value={p.id} className="!bg-white !text-slate-900">{p.display_name}</option>
-          ))}
-        </select>
-
+      {/* アクション */}
+      <div className="flex flex-col items-end gap-1.5" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onRemove();
           }}
-          className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+          className="p-1 text-slate-300 hover:text-red-500 transition-colors"
         >
           <Trash2 size={16} />
         </button>
+
+        {profiles.filter((p) => !String(p.id).startsWith('local-profile-')).length > 1 && ( // DBバックのプロファイルのみ表示
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const dbProfiles = profiles.filter((p) => !String(p.id).startsWith('local-profile-'));
+              const currentProfileIndex = dbProfiles.findIndex(p => String(p.id) === String(data.p_uid || activeProfileId));
+              const nextProfileIndex = currentProfileIndex >= 0 ? (currentProfileIndex + 1) % dbProfiles.length : 0;
+              onProfileChange(dbProfiles[nextProfileIndex]?.id || String(activeProfileId || ''));
+            }}
+            className="p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors"
+            title="次のアカウントに切り替え"
+          >
+            <User size={16} />
+          </button>
+        )}
+        <select
+          value={profiles.filter((p) => !String(p.id).startsWith('local-profile-')).some(p => p.id === String(data.p_uid || activeProfileId)) ? String(data.p_uid || activeProfileId) : profiles.filter((p) => !String(p.id).startsWith('local-profile-'))[0]?.id || ''}
+          onChange={(e) => {
+            e.stopPropagation();
+            onProfileChange(e.target.value);
+          }}
+          className="bg-slate-50 text-slate-500 text-xs font-black uppercase tracking-widest px-3 py-2 rounded-lg border-none focus:ring-0 appearance-none text-center cursor-pointer hover:bg-slate-100 shadow-inner max-w-[80px] truncate"
+        >
+          {profiles.filter((p) => !String(p.id).startsWith('local-profile-')).map(p => (
+            <option key={p.id} value={p.id} className="!bg-white !text-slate-900">{p.display_name}</option>
+          ))}
+        </select>
       </div>
     </div>
   );
@@ -655,6 +797,23 @@ interface EditCardDetailsModalProps {
 
 function EditCardDetailsModal({ isOpen, onClose, cardData, masterData, profiles, onSave, loading }: EditCardDetailsModalProps) {
   const [editingData, setEditingData] = useState(cardData);
+
+  const findCardMatch = (name?: string, pack?: string, rank?: number) => {
+    const normalizedName = String(name || '').toLowerCase();
+    const normalizedPack = String(pack || '').toLowerCase();
+    const exact = masterData.find(m =>
+      String(m.name || '').toLowerCase() === normalizedName &&
+      (!pack || String(m.pack || 'その他').toLowerCase() === normalizedPack) &&
+      (rank === undefined || Number(m.rank ?? 0) === Number(rank))
+    );
+    if (exact) return exact;
+
+    return masterData.find(m =>
+      String(m.name || '').toLowerCase() === normalizedName &&
+      (!pack || String(m.pack || 'その他').toLowerCase() === normalizedPack)
+    ) || null;
+  };
+
   const filteredNames = useMemo(() => {
     let data = masterData;
     if (editingData.pack) {
@@ -717,18 +876,16 @@ function EditCardDetailsModal({ isOpen, onClose, cardData, masterData, profiles,
         if (uniquePacks.length === 1) nextPack = uniquePacks[0] as string;
       }
 
-      const tripletMatch = masterData.find(m => 
-        String(m.name).toLowerCase() === nextName.toLowerCase() &&
-        (m.pack || 'その他') === (nextPack || 'その他') &&
-        Number(m.rank ?? 0) === Number(prev.stars ?? 0)
-      );
+      const tripletMatch = findCardMatch(nextName, nextPack || undefined, Number(prev.stars ?? 0));
 
       return {
         ...prev,
         name: nextName,
-        pack: nextPack,
+        pack: tripletMatch ? (tripletMatch.pack || 'その他') : nextPack,
         id: tripletMatch ? tripletMatch.id : `manual-${Date.now()}`,
-        stars: tripletMatch ? (tripletMatch.rank ?? 0) : prev.stars
+        stars: tripletMatch ? (tripletMatch.rank ?? 0) : prev.stars,
+        group: tripletMatch ? tripletMatch.group : prev.group,
+        croppedImg: tripletMatch ? (tripletMatch.image_url || tripletMatch.image || prev.croppedImg) : prev.croppedImg,
       };
     });
   };
@@ -750,18 +907,16 @@ function EditCardDetailsModal({ isOpen, onClose, cardData, masterData, profiles,
         if (uniqueNamesInPack.length === 1) nextName = uniqueNamesInPack[0];
       }
 
-      const tripletMatch = masterData.find(m => 
-        String(m.name).toLowerCase() === (nextName || '').toLowerCase() &&
-        (m.pack || 'その他') === nextPack &&
-        Number(m.rank ?? 0) === Number(prev.stars ?? 0)
-      );
+      const tripletMatch = findCardMatch(nextName, nextPack, Number(prev.stars ?? 0));
 
       return {
         ...prev,
         name: nextName,
         pack: nextPack,
         id: tripletMatch ? tripletMatch.id : `manual-${Date.now()}`,
-        stars: tripletMatch ? (tripletMatch.rank ?? 0) : prev.stars
+        stars: tripletMatch ? (tripletMatch.rank ?? 0) : prev.stars,
+        group: tripletMatch ? tripletMatch.group : prev.group,
+        croppedImg: tripletMatch ? (tripletMatch.image_url || tripletMatch.image || prev.croppedImg) : prev.croppedImg,
       };
     });
   };
@@ -776,7 +931,7 @@ function EditCardDetailsModal({ isOpen, onClose, cardData, masterData, profiles,
     }));
   };
 
-  const saveButtonDisabled = isNameEmpty; // Card name must always be present to save
+  const saveButtonDisabled = isNameEmpty;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
@@ -802,9 +957,10 @@ function EditCardDetailsModal({ isOpen, onClose, cardData, masterData, profiles,
               <Search size={12} className="text-blue-500" /> カード名
             </label>
             <select
-              value={editingData.name || ''}
+              value={masterData.length > 0 ? (editingData.name || '') : ''}
               disabled={loading}
               onChange={(e) => handleNameChange(e.target.value)}
+              hidden={masterData.length === 0}
               className={`w-full bg-white border rounded-xl px-3 py-2.5 text-xs font-bold outline-none transition-all appearance-none
                 ${isIdManual 
                   ? 'border-red-200 focus:ring-red-500/20 text-red-600'
@@ -816,10 +972,24 @@ function EditCardDetailsModal({ isOpen, onClose, cardData, masterData, profiles,
                 <option key={name} value={name} className="!bg-white !text-slate-900">{name}</option>
               ))}
             </select>
+            {masterData.length === 0 && (
+              <input
+                value={editingData.name || ''}
+                disabled={loading}
+                onChange={(event) => setEditingData((prev) => ({
+                  ...prev,
+                  name: event.target.value,
+                  id: String(prev.id || '').startsWith('manual-') ? prev.id : `manual-${Date.now()}`,
+                  pack: prev.pack || 'カスタム',
+                }))}
+                placeholder="カード名を入力"
+                className="w-full bg-white border border-red-200 rounded-xl px-3 py-2.5 text-xs font-bold outline-none text-red-600"
+              />
+            )}
           </div> {/* End of card name input */}
           {isIdManual && (
             <p className="text-[9px] font-black text-red-500 uppercase tracking-widest px-1 flex items-center gap-1">
-              <AlertCircle size={10} /> {isNameEmpty ? 'カード名を入力してください' : 'データベースに登録されていません'}
+              <AlertCircle size={10} /> {isNameEmpty ? 'カード名を入力してください' : 'カスタムカードとして保存されます'}
             </p>
           )}
 
@@ -850,16 +1020,16 @@ function EditCardDetailsModal({ isOpen, onClose, cardData, masterData, profiles,
                 disabled={loading || availableRanks.length <= 1}
                 onChange={(event) => {
                   const newStars = parseInt(event.target.value, 10);
-                  const match = masterData.find(m => 
-                    String(m.name).toLowerCase() === String(editingData.name || '').toLowerCase() &&
-                    String(m.pack || 'その他').toLowerCase() === String(editingData.pack || 'その他').toLowerCase() &&
-                    Number(m.rank ?? 0) === newStars
-                  );
+                  const match = findCardMatch(editingData.name, editingData.pack || undefined, newStars);
                   if (match) {
                     setEditingData(prev => ({
                       ...prev,
                       stars: newStars,
-                      id: match.id
+                      id: match.id,
+                      name: match.name,
+                      pack: match.pack || 'その他',
+                      group: match.group,
+                      croppedImg: match.image_url || match.image || prev.croppedImg,
                     }));
                   }
                 }}
@@ -894,7 +1064,8 @@ function EditCardDetailsModal({ isOpen, onClose, cardData, masterData, profiles,
           </button>
           <button
             onClick={() => onSave(editingData)} // Pass the updated data to parent
-            className="flex-1 py-5 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-blue-100 active:scale-95 transition-all"
+            disabled={saveButtonDisabled}
+            className="flex-1 py-5 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-blue-100 active:scale-95 transition-all disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
           >
             保存
           </button>

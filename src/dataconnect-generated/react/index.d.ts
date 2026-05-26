@@ -1,33 +1,30 @@
-import { CreateMovieData, CreateMovieVariables, UpsertUserData, UpsertUserVariables, AddReviewData, AddReviewVariables, DeleteReviewData, DeleteReviewVariables, ListMoviesData, ListUsersData, ListUserReviewsData, GetMovieByIdData, GetMovieByIdVariables, SearchMovieData, SearchMovieVariables } from '../';
+import { CreateCardData, CreateCardVariables, UpsertUserData, UpsertUserVariables, AddCardToInventoryData, AddCardToInventoryVariables, RemoveCardFromInventoryData, RemoveCardFromInventoryVariables, GetMyBindersData, CreateNewBinderData, CreateNewBinderVariables, GetCardDetailsData, GetCardDetailsVariables, AddCardToUserCollectionData, AddCardToUserCollectionVariables } from '../';
 import { UseDataConnectQueryResult, useDataConnectQueryOptions, UseDataConnectMutationResult, useDataConnectMutationOptions} from '@tanstack-query-firebase/react/data-connect';
 import { UseQueryResult, UseMutationResult} from '@tanstack/react-query';
 import { DataConnect } from 'firebase/data-connect';
 import { FirebaseError } from 'firebase/app';
 
 
-export function useCreateMovie(options?: useDataConnectMutationOptions<CreateMovieData, FirebaseError, CreateMovieVariables>): UseDataConnectMutationResult<CreateMovieData, CreateMovieVariables>;
-export function useCreateMovie(dc: DataConnect, options?: useDataConnectMutationOptions<CreateMovieData, FirebaseError, CreateMovieVariables>): UseDataConnectMutationResult<CreateMovieData, CreateMovieVariables>;
+export function useCreateCard(options?: useDataConnectMutationOptions<CreateCardData, FirebaseError, CreateCardVariables>): UseDataConnectMutationResult<CreateCardData, CreateCardVariables>;
+export function useCreateCard(dc: DataConnect, options?: useDataConnectMutationOptions<CreateCardData, FirebaseError, CreateCardVariables>): UseDataConnectMutationResult<CreateCardData, CreateCardVariables>;
 
 export function useUpsertUser(options?: useDataConnectMutationOptions<UpsertUserData, FirebaseError, UpsertUserVariables>): UseDataConnectMutationResult<UpsertUserData, UpsertUserVariables>;
 export function useUpsertUser(dc: DataConnect, options?: useDataConnectMutationOptions<UpsertUserData, FirebaseError, UpsertUserVariables>): UseDataConnectMutationResult<UpsertUserData, UpsertUserVariables>;
 
-export function useAddReview(options?: useDataConnectMutationOptions<AddReviewData, FirebaseError, AddReviewVariables>): UseDataConnectMutationResult<AddReviewData, AddReviewVariables>;
-export function useAddReview(dc: DataConnect, options?: useDataConnectMutationOptions<AddReviewData, FirebaseError, AddReviewVariables>): UseDataConnectMutationResult<AddReviewData, AddReviewVariables>;
+export function useAddCardToInventory(options?: useDataConnectMutationOptions<AddCardToInventoryData, FirebaseError, AddCardToInventoryVariables>): UseDataConnectMutationResult<AddCardToInventoryData, AddCardToInventoryVariables>;
+export function useAddCardToInventory(dc: DataConnect, options?: useDataConnectMutationOptions<AddCardToInventoryData, FirebaseError, AddCardToInventoryVariables>): UseDataConnectMutationResult<AddCardToInventoryData, AddCardToInventoryVariables>;
 
-export function useDeleteReview(options?: useDataConnectMutationOptions<DeleteReviewData, FirebaseError, DeleteReviewVariables>): UseDataConnectMutationResult<DeleteReviewData, DeleteReviewVariables>;
-export function useDeleteReview(dc: DataConnect, options?: useDataConnectMutationOptions<DeleteReviewData, FirebaseError, DeleteReviewVariables>): UseDataConnectMutationResult<DeleteReviewData, DeleteReviewVariables>;
+export function useRemoveCardFromInventory(options?: useDataConnectMutationOptions<RemoveCardFromInventoryData, FirebaseError, RemoveCardFromInventoryVariables>): UseDataConnectMutationResult<RemoveCardFromInventoryData, RemoveCardFromInventoryVariables>;
+export function useRemoveCardFromInventory(dc: DataConnect, options?: useDataConnectMutationOptions<RemoveCardFromInventoryData, FirebaseError, RemoveCardFromInventoryVariables>): UseDataConnectMutationResult<RemoveCardFromInventoryData, RemoveCardFromInventoryVariables>;
 
-export function useListMovies(options?: useDataConnectQueryOptions<ListMoviesData>): UseDataConnectQueryResult<ListMoviesData, undefined>;
-export function useListMovies(dc: DataConnect, options?: useDataConnectQueryOptions<ListMoviesData>): UseDataConnectQueryResult<ListMoviesData, undefined>;
+export function useGetMyBinders(options?: useDataConnectQueryOptions<GetMyBindersData>): UseDataConnectQueryResult<GetMyBindersData, undefined>;
+export function useGetMyBinders(dc: DataConnect, options?: useDataConnectQueryOptions<GetMyBindersData>): UseDataConnectQueryResult<GetMyBindersData, undefined>;
 
-export function useListUsers(options?: useDataConnectQueryOptions<ListUsersData>): UseDataConnectQueryResult<ListUsersData, undefined>;
-export function useListUsers(dc: DataConnect, options?: useDataConnectQueryOptions<ListUsersData>): UseDataConnectQueryResult<ListUsersData, undefined>;
+export function useCreateNewBinder(options?: useDataConnectMutationOptions<CreateNewBinderData, FirebaseError, CreateNewBinderVariables>): UseDataConnectMutationResult<CreateNewBinderData, CreateNewBinderVariables>;
+export function useCreateNewBinder(dc: DataConnect, options?: useDataConnectMutationOptions<CreateNewBinderData, FirebaseError, CreateNewBinderVariables>): UseDataConnectMutationResult<CreateNewBinderData, CreateNewBinderVariables>;
 
-export function useListUserReviews(options?: useDataConnectQueryOptions<ListUserReviewsData>): UseDataConnectQueryResult<ListUserReviewsData, undefined>;
-export function useListUserReviews(dc: DataConnect, options?: useDataConnectQueryOptions<ListUserReviewsData>): UseDataConnectQueryResult<ListUserReviewsData, undefined>;
+export function useGetCardDetails(vars: GetCardDetailsVariables, options?: useDataConnectQueryOptions<GetCardDetailsData>): UseDataConnectQueryResult<GetCardDetailsData, GetCardDetailsVariables>;
+export function useGetCardDetails(dc: DataConnect, vars: GetCardDetailsVariables, options?: useDataConnectQueryOptions<GetCardDetailsData>): UseDataConnectQueryResult<GetCardDetailsData, GetCardDetailsVariables>;
 
-export function useGetMovieById(vars: GetMovieByIdVariables, options?: useDataConnectQueryOptions<GetMovieByIdData>): UseDataConnectQueryResult<GetMovieByIdData, GetMovieByIdVariables>;
-export function useGetMovieById(dc: DataConnect, vars: GetMovieByIdVariables, options?: useDataConnectQueryOptions<GetMovieByIdData>): UseDataConnectQueryResult<GetMovieByIdData, GetMovieByIdVariables>;
-
-export function useSearchMovie(vars?: SearchMovieVariables, options?: useDataConnectQueryOptions<SearchMovieData>): UseDataConnectQueryResult<SearchMovieData, SearchMovieVariables>;
-export function useSearchMovie(dc: DataConnect, vars?: SearchMovieVariables, options?: useDataConnectQueryOptions<SearchMovieData>): UseDataConnectQueryResult<SearchMovieData, SearchMovieVariables>;
+export function useAddCardToUserCollection(options?: useDataConnectMutationOptions<AddCardToUserCollectionData, FirebaseError, AddCardToUserCollectionVariables>): UseDataConnectMutationResult<AddCardToUserCollectionData, AddCardToUserCollectionVariables>;
+export function useAddCardToUserCollection(dc: DataConnect, options?: useDataConnectMutationOptions<AddCardToUserCollectionData, FirebaseError, AddCardToUserCollectionVariables>): UseDataConnectMutationResult<AddCardToUserCollectionData, AddCardToUserCollectionVariables>;
