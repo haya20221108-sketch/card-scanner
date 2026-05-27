@@ -9,7 +9,6 @@ import {
   Award,
   Inbox,
   SlidersHorizontal,
-  Filter,
   XCircle,
   X,
   Save,
@@ -100,7 +99,8 @@ export default function CollectionPage() {
   const [filterPack, setFilterPack] = useState<string>('');
   const [filterRanks, setFilterRanks] = useState<number[]>([]);
   const [filterProfiles, setFilterProfiles] = useState<string[]>([]);
-  const [filterOwnership, setFilterOwnership] = useState<'all' | 'owned' | 'unowned' | 'trade'>('all');
+  const [filterOwnership, setFilterOwnership] = useState<'all' | 'owned' | 'unowned'>('all');
+  const [filterCategory, setFilterCategory] = useState<'sort' | 'pack' | 'rank' | 'user' | 'actions'>('sort');
 
   // Sorting
   const [sortBy, setSortBy] = useState<'rank-desc' | 'rank-asc' | 'name-asc' | 'pack-asc'>('rank-desc');
@@ -337,7 +337,6 @@ export default function CollectionPage() {
       // Ownership
       if (filterOwnership === 'owned' && total === 0) return false;
       if (filterOwnership === 'unowned' && total > 0) return false;
-      if (filterOwnership === 'trade' && total <= 1) return false;
 
       // ランク
       if (filterRanks.length > 0 && !filterRanks.includes(card.rank ?? 0)) return false;
@@ -671,352 +670,164 @@ export default function CollectionPage() {
   // =========================
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans flex flex-col max-w-md mx-auto">
-      {/* Header */}
-      <div className="bg-slate-50/80 backdrop-blur-md sticky top-0 z-20 px-6 py-4 pt-8">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/settings"
-            className="p-2 -ml-2 text-slate-400 bg-white rounded-xl shadow-sm border border-slate-100"
-          >
-            <ChevronLeft size={20} />
-          </Link>
-          <div className="flex-1 ml-4">
-            <h1 className="text-xl font-black italic text-slate-900 uppercase tracking-tighter">My Binder</h1>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">コレクションの管理</p>
-          </div>
-          
-          <button
-            onClick={() => setIsFilterOpen(!isFilterOpen)}
-            className={`p-2 -mr-2 rounded-xl transition-all relative ${
-              isFilterOpen || activeFilterCount > 0 ? 'bg-blue-50 text-blue-600' : 'text-slate-400'
-            }`}
-          >
-            <SlidersHorizontal size={22} />
-            {activeFilterCount > 0 && (
-              <span className="absolute top-1 right-1 w-4 h-4 bg-blue-600 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Batch Mode Banner */}
-      {isBatchMode && (
-        <div className="bg-blue-600 text-white p-3 sticky top-[73px] z-10 shadow-lg flex flex-col gap-2 animate-in slide-in-from-top-full duration-300">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <Zap size={14} fill="white" className="animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-widest">一括追加モード有効</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={triggerBatchSaveConfirmation}
-                className="px-3 py-1.5 bg-white text-blue-600 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
-              >
-                保存して終了
-              </button>
-              <button 
-                onClick={() => showAlert(
-                  '変更を破棄しますか？',
-                  '保存されていない変更は失われます。',
-                  'info',
-                  () => { // Confirm
-                    setIsBatchMode(false);
-                    loadData();
-                    closeAlert();
-                  },
-                  () => closeAlert() // Cancel
-                )} 
-                className="p-1 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </div>
-          <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 px-1">
-            {dbProfiles.map(p => (
-              <button
-                key={p.id}
-                onClick={() => setBatchPUid(p.id)}
-                className={`flex-shrink-0 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-tighter transition-all ${
-                  batchPUid === p.id ? 'bg-white text-blue-600 shadow-md' : 'bg-blue-700 text-blue-200'
-                }`}
-              >
-                {p.display_name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Active Filter Chips */}
-      <div className="w-full px-6 overflow-x-auto no-scrollbar flex gap-2 pt-2">
-        {filterPack && <FilterChip label={filterPack} onClear={() => setFilterPack('')} />}
-        {filterRanks.map(r => (
-          <FilterChip key={`r-${r}`} label={`Rank ${r}`} onClear={() => setFilterRanks(prev => prev.filter(x => x !== r))} />
-        ))}
-        {filterProfiles.map(pId => {
-          const name = dbProfiles.find(p => p.id === pId)?.display_name || 'User';
-          return (
-            <FilterChip 
-              key={`p-${pId}`} 
-              label={`User: ${name}`} 
-              onClear={() => setFilterProfiles(prev => prev.filter(x => x !== pId))} 
-            />
-          );
-        })}
-        {sortBy !== 'rank-desc' && (
-          <FilterChip 
-            label={`Sort: ${sortBy === 'name-asc' ? 'Name' : sortBy === 'pack-asc' ? 'Pack' : 'Rank Asc'}`} 
-            onClear={() => setSortBy('rank-desc')} 
-          />
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="px-6 py-4 w-full space-y-6">
-        {/* Search */}
-        <div className="relative">
-          <Search
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300"
-            size={18}
-          />
-
-          <input
-            type="text"
-            placeholder="カード名で検索..."
-            className="w-full pl-12 pr-12 py-4 bg-white rounded-2xl text-sm shadow-sm focus:outline-none placeholder:text-slate-300 border border-slate-100"
-            value={searchQuery}
-            onChange={(e) =>
-              setSearchQuery(e.target.value)
-            }
-          />
-          {searchQuery && (
-            <button 
-              onClick={() => setSearchQuery('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
+        <div className="min-h-screen bg-slate-50 font-sans overflow-x-hidden relative">
+      {/* Main Content Wrapper - Slides when filter is open */}
+      <div className={`flex flex-col max-w-md mx-auto min-h-screen transition-transform duration-300 ease-in-out ${isFilterOpen ? '-translate-x-[85%]' : 'translate-x-0'}`}>
+        {/* Header */}
+        <div className="bg-slate-50/80 backdrop-blur-md sticky top-0 z-20 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <Link
+              href="/settings"
+              className="p-2 -ml-2 text-slate-400 bg-white rounded-xl shadow-sm border border-slate-100"
             >
-              <XCircle size={18} />
-            </button>
+              <ChevronLeft size={20} />
+            </Link>
+            <div className="flex-1 ml-4">
+              <h1 className="text-xl font-black italic text-slate-900 uppercase tracking-tighter">My Binder</h1>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">コレクションの管理</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Batch Mode Banner */}
+        {isBatchMode && (
+          <div className="bg-blue-600 text-white p-3 sticky top-[73px] z-10 shadow-lg flex flex-col gap-2 animate-in slide-in-from-top-full duration-300">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <Zap size={14} fill="white" className="animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-widest">一括追加モード有効</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={triggerBatchSaveConfirmation}
+                  className="px-3 py-1.5 bg-white text-blue-600 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                >
+                  保存して終了
+                </button>
+                <button 
+                  onClick={() => showAlert(
+                    '変更を破棄しますか？',
+                    '保存されていない変更は失われます。',
+                    'info',
+                    () => { // Confirm
+                      setIsBatchMode(false);
+                      loadData();
+                      closeAlert();
+                    },
+                    () => closeAlert() // Cancel
+                  )} 
+                  className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 px-1">
+              {dbProfiles.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setBatchPUid(p.id)}
+                  className={`flex-shrink-0 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-tighter transition-all ${
+                    batchPUid === p.id ? 'bg-white text-blue-600 shadow-md' : 'bg-blue-700 text-blue-200'
+                  }`}
+                >
+                  {p.display_name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Active Filter Chips */}
+        <div className="w-full px-6 overflow-x-auto no-scrollbar flex gap-2 pt-2">
+          {filterPack && <FilterChip label={filterPack} onClear={() => setFilterPack('')} />}
+          {filterRanks.map(r => (
+            <FilterChip key={`r-${r}`} label={`Rank ${r}`} onClear={() => setFilterRanks(prev => prev.filter(x => x !== r))} />
+          ))}
+          {filterProfiles.map(pId => {
+            const name = dbProfiles.find(p => p.id === pId)?.display_name || 'User';
+            return (
+              <FilterChip 
+                key={`p-${pId}`} 
+                label={`User: ${name}`} 
+                onClear={() => setFilterProfiles(prev => prev.filter(x => x !== pId))} 
+              />
+            );
+          })}
+          {sortBy !== 'rank-desc' && (
+            <FilterChip 
+              label={`Sort: ${sortBy === 'name-asc' ? 'Name' : sortBy === 'pack-asc' ? 'Pack' : 'Rank Asc'}`} 
+              onClear={() => setSortBy('rank-desc')} 
+            />
           )}
         </div>
 
-        {/* Quick Ownership Switcher */}
-        <div className="flex bg-white p-1 rounded-2xl border border-slate-100 shadow-sm animate-in fade-in slide-in-from-top-2 duration-500">
-        {[
-          { id: 'all', label: 'すべて' },
-          { id: 'owned', label: '所持' },
-          { id: 'unowned', label: '未所持' },
-          { id: 'trade', label: 'トレード' }
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setFilterOwnership(tab.id as any)}
-            className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-              filterOwnership === tab.id ? 'bg-white text-blue-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-        </div>
-
-        {/* Collection Progress Header */}
-        {collectionProgress && (
-          <div className="px-1 py-2 space-y-2.5 animate-in fade-in slide-in-from-left-4 duration-700">
-            <div className="flex justify-between items-end">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                {filterPack ? `${filterPack} Completion` : 'Total Collection'}
-              </p>
-              <p className="text-[10px] font-black text-blue-600 uppercase tabular-nums">
-                {collectionProgress.ownedCount} / {collectionProgress.total} <span className="ml-1 text-slate-400">({collectionProgress.percent}%)</span>
-              </p>
-            </div>
-            <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden shadow-inner border border-slate-100">
-              <div 
-                className="h-full bg-gradient-to-r from-blue-400 via-blue-600 to-indigo-600 transition-all duration-1000 ease-out rounded-full shadow-[0_0_12px_rgba(37,99,235,0.4)]" 
-                style={{ width: `${collectionProgress.percent}%` }}
+        {/* Content */}
+        <div className="px-6 py-4 w-full space-y-6">
+          {/* Search */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300"
+                size={18}
               />
+
+              <input
+                type="text"
+                placeholder="カード名で検索..."
+                className="w-full pl-12 pr-12 py-4 bg-white rounded-2xl text-sm shadow-sm focus:outline-none placeholder:text-slate-300 border border-slate-100"
+                value={searchQuery}
+                onChange={(e) =>
+                  setSearchQuery(e.target.value)
+                }
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 transition-colors"
+                >
+                  <XCircle size={18} />
+                </button>
+              )}
             </div>
+            <button
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              className={`p-4 rounded-2xl transition-all relative border shadow-sm flex items-center justify-center ${
+                isFilterOpen || activeFilterCount > 0 
+                  ? 'bg-blue-50 border-blue-100 text-blue-600' 
+                  : 'bg-white border-slate-100 text-slate-400'
+              }`}
+            >
+              <SlidersHorizontal size={22} />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
           </div>
-        )}
 
-        {/* Pro Filter Panel */}
-        {isFilterOpen && (
-          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl p-6 space-y-6 animate-in slide-in-from-top-4 duration-300">
-            {/* Quick Actions */}
-            <div className="space-y-3">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Settings2 size={12} /> クイックアクション
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={handleSyncMaster}
-                  className="flex items-center justify-center gap-2 py-3 px-4 bg-slate-50 hover:bg-slate-100 rounded-2xl text-[10px] font-black uppercase text-slate-700 transition-all active:scale-95"
-                >
-                  <RefreshCw size={14} className="text-blue-500" />
-                  同期
-                </button>
-                <button
-                  onClick={toggleBatchMode}
-                  className={`flex items-center justify-center gap-2 py-3 px-4 rounded-2xl text-[10px] font-black uppercase transition-all active:scale-95 ${
-                    isBatchMode ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <Zap size={14} className={isBatchMode ? 'text-white' : 'text-blue-500'} />
-                  一括追加
-                </button>
-              </div>
-            </div>
-
-            <div className="h-px bg-slate-50 mx-2" />
-
-            {/* Sort Order */}
-            <div className="space-y-3">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <SlidersHorizontal size={12} /> 並び替え
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: 'rank-desc', label: 'ランク高い順' },
-                  { id: 'rank-asc', label: 'ランク低い順' },
-                  { id: 'name-asc', label: '名前順' },
-                  { id: 'pack-asc', label: 'パック順' }
-                ].map((option) => (
-                  <button
-                    key={option.id}
-                    onClick={() => setSortBy(option.id as any)}
-                    className={`py-2.5 rounded-xl text-[10px] font-black uppercase transition-all border ${
-                      sortBy === option.id 
-                        ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-sm' 
-                        : 'bg-white border-slate-100 text-slate-400'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Pack Selector */}
-            <div className="space-y-3">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Package size={12} /> パック
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setFilterPack('')}
-                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black transition-all border ${
-                    filterPack === '' ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-slate-50 border-slate-50 text-slate-400'
-                  }`}
-                >
-                  すべて
-                </button>
-                {allPacks.map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setFilterPack(p)}
-                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black transition-all border ${
-                      filterPack === p ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-slate-50 border-slate-50 text-slate-400'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Rank Multi-Selector */}
-            <div className="space-y-2">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Award size={12} /> ランク（複数選択）
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {allRanks.map(r => (
-                  <button
-                    key={r}
-                    onClick={() => setFilterRanks(prev => 
-                      prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]
-                    )}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black border transition-all ${
-                      filterRanks.includes(r) 
-                        ? 'bg-amber-100 border-amber-200 text-amber-700' 
-                        : 'bg-white border-slate-100 text-slate-400'
-                    }`}
-                  >
-                    Rank {r}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Account Multi-Selector */}
-            <div className="space-y-2">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <User size={12} /> アカウント（複数選択）
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {profiles.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => setFilterProfiles(prev => 
-                      prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id]
-                    )}
-                    className={`px-3 py-3 rounded-2xl text-[10px] font-black text-left border transition-all truncate ${
-                      filterProfiles.includes(p.id)
-                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100'
-                        : 'bg-slate-50 border-slate-50 text-slate-500'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full ${filterProfiles.includes(p.id) ? 'bg-white' : 'bg-slate-300'}`} />
-                      {p.display_name}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-2 space-y-3">
-              <div className="flex justify-between items-center px-1">
-                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
-                  {filteredCards.length} Cards Match
-                </p>
-                <button
-                  onClick={() => {
-                    setFilterPack('');
-                    setFilterRanks([]);
-                    setFilterProfiles([]);
-                    setFilterOwnership('all');
-                    setSearchQuery('');
-                    setSortBy('rank-desc');
-                  }}
-                  className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors"
-                >
-                  リセット
-                </button>
-              </div>
-              <button
-                onClick={() => setIsFilterOpen(false)}
-                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
-              >
-                結果を表示する
-              </button>
-            </div>
+          {/* Quick Ownership Switcher */}
+          <div className="flex bg-white p-1 rounded-2xl border border-slate-100 shadow-sm animate-in fade-in slide-in-from-top-2 duration-500">
+          {[
+            { id: 'all', label: 'すべて' },
+            { id: 'owned', label: '所持' },
+            { id: 'unowned', label: '未所持' }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setFilterOwnership(tab.id as any)}
+              className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                filterOwnership === tab.id ? 'bg-white text-blue-600 shadow-md border border-slate-100' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
           </div>
-        )}
 
-        <div className="flex items-center justify-between px-1">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            {filteredCards.length} <span className="text-slate-300">Cards Displayed</span>
-          </p>
-        </div>
-
-        {/* Cards */}
-        <div className="grid grid-cols-3 gap-3 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
-
+          {/* Cards Grid */}
+          <div className="grid grid-cols-3 gap-2 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
           {filteredCards.length === 0 ? (
             <div className="col-span-3 py-20 text-center bg-white rounded-[2rem] border border-dashed border-slate-200">
               <Inbox
@@ -1038,17 +849,9 @@ export default function CollectionPage() {
             </div>
           ) : (
             filteredCards.map((card) => {
-              const display =
-                resolveCardDisplay(card);
-
-              const stats =
-                cardStatsMap.get(
-                  String(card.id)
-                );
-
-              const totalQuantity =
-                stats?.total || 0;
-
+              const display = resolveCardDisplay(card);
+              const stats = cardStatsMap.get(String(card.id));
+              const totalQuantity = stats?.total || 0;
               return (
                 <button
                   key={String(card.id)}
@@ -1063,7 +866,6 @@ export default function CollectionPage() {
                   {totalQuantity > 0 && (
                     <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-400 to-indigo-600" />
                   )}
-
                   {/* Quantity Badge */}
                   <div
                     className={`absolute top-2 right-2 min-w-[20px] h-[18px] px-1.5 rounded-lg flex items-center justify-center text-[9px] font-black leading-none gap-1 shadow-sm ${
@@ -1072,7 +874,7 @@ export default function CollectionPage() {
                         : 'bg-slate-200 text-slate-500'
                     }`}
                   >
-                    {totalQuantity > 1 && filterOwnership !== 'trade' && (
+                    {totalQuantity > 1 && (
                       <ArrowLeftRight size={8} className="text-blue-200 animate-pulse" />
                     )}
                     {isBatchMode && batchPUid && (
@@ -1085,7 +887,6 @@ export default function CollectionPage() {
                     )}
                     {totalQuantity}
                   </div>
-
                   <div className="flex-1">
                     <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate pr-6">
                       {card.pack || 'No Pack'}
@@ -1094,7 +895,6 @@ export default function CollectionPage() {
                       {display.name}
                     </h2>
                   </div>
-
                   <div className="mt-auto space-y-1">
                     <div className="flex items-center gap-0.5">
                       {Array.from({ length: Math.max(0, Math.min(5, card.rank || 0)) }).map((_, i) => (
@@ -1109,6 +909,180 @@ export default function CollectionPage() {
           )}
         </div>
       </div>
+
+      {/* Pro Filter Sidebar (Two-Stage Drawer) */}
+      {isFilterOpen && (
+        <div className="fixed inset-0 z-[60] flex justify-end">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300" 
+            onClick={() => setIsFilterOpen(false)} 
+          />
+          
+          {/* Sidebar Content */}
+          <div className="relative w-[85%] max-w-sm bg-white h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300 ease-out">
+            {/* Header */}
+            <div className="px-6 py-8 flex items-center justify-between border-b border-slate-50">
+              <div>
+                <h2 className="text-xl font-black italic text-slate-900 uppercase tracking-tighter">Filters</h2>
+                <p className="text-[9px] font-black text-blue-600 uppercase tracking-[0.2em]">{filteredCards.length} Cards Match</p>
+              </div>
+              <button onClick={() => setIsFilterOpen(false)} className="p-2 bg-slate-50 rounded-full text-slate-400">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 flex overflow-hidden">
+              {/* Stage 1: Categories (Left) */}
+              <div className="w-24 bg-slate-50 border-r border-slate-100 flex flex-col">
+                {[
+                  { id: 'sort', label: '順序', icon: SlidersHorizontal },
+                  { id: 'pack', label: 'パック', icon: Package },
+                  { id: 'rank', label: 'ランク', icon: Award },
+                  { id: 'user', label: 'アカ', icon: User },
+                  { id: 'actions', label: '管理', icon: Settings2 },
+                ].map((cat) => {
+                  const Icon = cat.icon;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setFilterCategory(cat.id as any)}
+                      className={`flex-1 flex flex-col items-center justify-center gap-2 transition-all border-b border-slate-100 ${
+                        filterCategory === cat.id 
+                          ? 'bg-white text-blue-600 border-r-4 border-blue-600' 
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      <Icon size={20} />
+                      <span className="text-[8px] font-black uppercase tracking-widest">{cat.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Stage 2: Options (Right) */}
+              <div className="flex-1 p-6 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-left-2 duration-300">
+                {filterCategory === 'sort' && (
+                  <div className="space-y-2">
+                    {['rank-desc', 'rank-asc', 'name-asc', 'pack-asc'].map((id) => (
+                      <button
+                        key={id}
+                        onClick={() => setSortBy(id as any)}
+                        className={`w-full py-4 px-4 rounded-2xl text-[10px] font-black text-left uppercase transition-all border ${
+                          sortBy === id ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-slate-100 text-slate-400'
+                        }`}
+                      >
+                        {id === 'rank-desc' ? 'ランク高い順' : id === 'rank-asc' ? 'ランク低い順' : id === 'name-asc' ? '名前順' : 'パック順'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {filterCategory === 'pack' && (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setFilterPack('')}
+                      className={`w-full py-4 px-4 rounded-2xl text-[10px] font-black text-left uppercase transition-all border ${
+                        filterPack === '' ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'
+                      }`}
+                    >
+                      すべて
+                    </button>
+                    {allPacks.map(p => (
+                      <button
+                        key={p}
+                        onClick={() => setFilterPack(p)}
+                        className={`w-full py-4 px-4 rounded-2xl text-[10px] font-black text-left uppercase transition-all border ${
+                          filterPack === p ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {filterCategory === 'rank' && (
+                  <div className="space-y-2">
+                    {allRanks.map(r => (
+                      <button
+                        key={r}
+                        onClick={() => setFilterRanks(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r])}
+                        className={`w-full py-4 px-4 rounded-2xl text-[10px] font-black text-left uppercase transition-all border ${
+                          filterRanks.includes(r) ? 'bg-amber-100 border-amber-200 text-amber-700 shadow-sm' : 'bg-white border-slate-100 text-slate-400'
+                        }`}
+                      >
+                        Rank {r}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {filterCategory === 'user' && (
+                  <div className="space-y-2">
+                    {profiles.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => setFilterProfiles(prev => prev.includes(p.id) ? prev.filter(x => x !== p.id) : [...prev, p.id])}
+                        className={`w-full py-4 px-4 rounded-2xl text-[10px] font-black text-left uppercase transition-all border ${
+                          filterProfiles.includes(p.id) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'
+                        }`}
+                      >
+                        {p.display_name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {filterCategory === 'actions' && (
+                  <div className="space-y-4">
+                    <button
+                      onClick={handleSyncMaster}
+                      className="w-full flex items-center justify-between py-5 px-6 bg-slate-50 rounded-2xl text-[10px] font-black uppercase text-slate-700 active:scale-95"
+                    >
+                      <span>マスター同期</span>
+                      <RefreshCw size={14} className="text-blue-500" />
+                    </button>
+                    <button
+                      onClick={toggleBatchMode}
+                      className={`w-full flex items-center justify-between py-5 px-6 rounded-2xl text-[10px] font-black uppercase transition-all active:scale-95 ${
+                        isBatchMode ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span>一括追加モード</span>
+                      <Zap size={14} className={isBatchMode ? 'text-white' : 'text-blue-500'} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-slate-50 bg-white">
+              <button
+                onClick={() => {
+                  setFilterPack('');
+                  setFilterRanks([]);
+                  setFilterProfiles([]);
+                  setFilterOwnership('all');
+                  setSearchQuery('');
+                  setSortBy('rank-desc');
+                  setIsFilterOpen(false);
+                }}
+                className="w-full py-5 text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]"
+              >
+                すべての条件をクリア
+              </button>
+              <button
+                onClick={() => setIsFilterOpen(false)}
+                className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all"
+              >
+                Binderを更新
+              </button>
+            </div>
+        </div>
+      </div>
+      )}
 
       {/* Floating Scanner Button - 最も使いやすい位置に配置 */}
       <Link

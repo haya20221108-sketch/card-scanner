@@ -109,8 +109,8 @@ export default function TradePage() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans flex flex-col max-w-md mx-auto">
       {/* Header */}
-      <header className="px-6 py-4 pt-8 bg-slate-50/80 backdrop-blur-md sticky top-0 z-20">
-        <div className="flex items-center gap-4">
+      <header className="px-6 py-4 bg-slate-50/80 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between">
+        <div className="flex items-center gap-3">
           <Link href="/home" className="p-2 -ml-2 text-slate-400 bg-white rounded-xl shadow-sm border border-slate-100">
             <ChevronLeft size={20} />
           </Link>
@@ -119,6 +119,7 @@ export default function TradePage() {
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">交換可能なカード（余剰分）</p>
           </div>
         </div>
+        <RefreshCw size={20} className="text-slate-300" onClick={() => loadData()} />
       </header>
 
       <div className="px-6 py-4 space-y-6 flex-1">
