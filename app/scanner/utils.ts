@@ -90,6 +90,7 @@ export async function analyzeCard(base64Image: string, masterData: any[]) {
         pack: bestMatch.pack,
         stars: bestMatch.rank, // 数値を格納
         croppedImg: displayData.imageUrl,
+        sourceImage: base64Image,
         date: new Date().getTime()
       });
     }

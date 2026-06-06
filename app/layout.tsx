@@ -1,5 +1,6 @@
 import './globals.css';
 import { TabBar } from './components/TabBar';
+import { ScannerFab } from './components/ScannerFab';
 import { AuthProvider } from '../AuthContext';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -10,6 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="min-h-screen">
             {children}
           </div>
+          <ScannerFab />
           <TabBar />
         </AuthProvider>
       </body>

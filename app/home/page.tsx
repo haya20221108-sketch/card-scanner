@@ -179,10 +179,10 @@ export default function HomePage() {
           <p className="text-[9px] font-black uppercase tracking-[0.2em] mb-1 opacity-60">Total Collection</p>
           <div className="text-3xl font-black italic">{loading ? '...' : stats.total.toLocaleString()}</div>
         </div>
-        <Link href="/scanner" className="bg-blue-600 rounded-[2rem] p-6 text-white shadow-xl active:scale-95 transition-all">
-          <p className="text-[9px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">New Scan</p>
-          <div className="text-xl font-black leading-tight">ADD NEW<br/>CARDS</div>
-        </Link>
+        <div className="bg-white rounded-[2rem] p-6 text-slate-900 shadow-sm border border-slate-100">
+          <p className="text-[9px] font-black uppercase tracking-[0.2em] mb-1 text-slate-400">Rank 5 Cards</p>
+          <div className="text-3xl font-black italic">{loading ? '...' : stats.byRank[5].toLocaleString()}</div>
+        </div>
       </div>
 
       {/* Distribution */}
