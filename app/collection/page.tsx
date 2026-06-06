@@ -56,6 +56,7 @@ interface Card {
   image_url?: string;
   rank?: number;
   pack?: string;
+  subtype?: string;
 }
 
 interface Profile {
@@ -116,8 +117,8 @@ export default function CollectionPage() {
 
   // Sorting
   const [sortBy, setSortBy] = useState<
-    "rank-desc" | "rank-asc" | "name-asc" | "pack-asc"
-  >("rank-desc");
+    "id-asc" | "rank-asc" | "rank-desc" | "name-asc" | "pack-asc"
+  >("id-asc");
 
   // Modal
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
@@ -129,7 +130,7 @@ export default function CollectionPage() {
     if (saved) {
       try {
         const { sortBy: s, filterOwnership: o } = JSON.parse(saved);
-        if (s) setSortBy(s);
+        if (s && ["id-asc", "rank-desc", "rank-asc", "name-asc", "pack-asc"].includes(s)) setSortBy(s);
         if (o) setFilterOwnership(o);
       } catch (e) {
         console.error("Failed to load prefs:", e);
@@ -352,7 +353,7 @@ export default function CollectionPage() {
       filterRanks.length > 0,
       filterProfiles.length > 0,
       filterOwnership !== "all",
-      sortBy !== "rank-desc",
+      sortBy !== "id-asc",
     ].filter(Boolean).length;
   }, [filterPack, filterRanks, filterProfiles, filterOwnership, sortBy]);
 
@@ -430,6 +431,8 @@ export default function CollectionPage() {
 
     return [...result].sort((a, b) => {
       switch (sortBy) {
+        case "id-asc":
+          return a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' });
         case "rank-desc":
           return (b.rank || 0) - (a.rank || 0);
         case "rank-asc":
@@ -734,7 +737,7 @@ export default function CollectionPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
-  const handleBatchAdd = (cardId: string) => {
+  const handleBatchUpdate = (cardId: string, delta: number) => {
     if (!profiles.length) {
       showAlert(
         "アカウントがありません",
@@ -755,7 +758,7 @@ export default function CollectionPage() {
     const targetPId = normalizePUid(batchPUid);
     const stats = cardStatsMap.get(cardId);
     const currentQty = stats?.profileQuantities[targetPId] || 0;
-    const nextQty = currentQty + 1;
+    const nextQty = Math.max(0, currentQty + delta);
 
     // UIに即時反映
     setCollectionRecords((prev) => {
@@ -840,25 +843,44 @@ export default function CollectionPage() {
                 コレクションの管理
               </p>
             </div>
+            {/* Quick Batch Mode Toggle */}
+            <button
+              onClick={toggleBatchMode}
+              className={`p-2.5 rounded-xl transition-all active:scale-90 ${
+                isBatchMode 
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-200" 
+                  : "bg-white text-slate-400 border border-slate-100 shadow-sm"
+              }`}
+              title="一括追加モード"
+            >
+              <Zap size={20} fill={isBatchMode ? "currentColor" : "none"} />
+            </button>
           </div>
         </div>
 
         {/* Batch Mode Banner */}
         {isBatchMode && (
-          <div className="bg-blue-600 text-white p-3 sticky top-[73px] z-10 shadow-lg flex flex-col gap-2 animate-in slide-in-from-top-full duration-300">
+          <div className="bg-slate-900/95 backdrop-blur-xl text-white p-4 sticky top-[73px] z-30 shadow-2xl flex flex-col gap-4 animate-in slide-in-from-top-full duration-500 border-b border-white/10">
             <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <Zap size={14} fill="white" className="animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  一括追加モード有効
-                </span>
-              </div>
               <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                  <Zap size={14} fill="white" className="animate-pulse" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.15em] leading-none">
+                    一括追加モード
+                  </p>
+                  <p className="text-[8px] font-bold text-blue-400 uppercase tracking-widest mt-1">
+                    タップして +1 枚追加
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
                 <button
                   onClick={triggerBatchSaveConfirmation}
-                  className="px-3 py-1.5 bg-white text-blue-600 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
                 >
-                  保存して終了
+                  保存
                 </button>
                 <button
                   onClick={() =>
@@ -875,21 +897,21 @@ export default function CollectionPage() {
                       () => closeAlert(), // Cancel
                     )
                   }
-                  className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors"
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
             </div>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 px-1">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar px-1">
               {dbProfiles.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => setBatchPUid(p.id)}
-                  className={`flex-shrink-0 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-tighter transition-all ${
+                  className={`flex-shrink-0 px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${
                     batchPUid === p.id
-                      ? "bg-white text-blue-600 shadow-md"
-                      : "bg-blue-700 text-blue-200"
+                      ? "bg-white text-slate-900 border-white shadow-md scale-105"
+                      : "bg-transparent text-white/40 border-white/10 hover:border-white/20"
                   }`}
                 >
                   {p.display_name}
@@ -926,10 +948,17 @@ export default function CollectionPage() {
               />
             );
           })}
-          {sortBy !== "rank-desc" && (
+          {sortBy !== "id-asc" && (
             <FilterChip
-              label={`Sort: ${sortBy === "name-asc" ? "Name" : sortBy === "pack-asc" ? "Pack" : "Rank Asc"}`}
-              onClear={() => setSortBy("rank-desc")}
+              label={`Sort: ${
+                sortBy === "name-asc" 
+                  ? "Name" 
+                  : sortBy === "pack-asc" 
+                  ? "Pack" 
+                  : sortBy === "rank-desc"
+                  ? "Rank Desc"
+                  : "Rank Asc"}`}
+              onClear={() => setSortBy("id-asc")}
             />
           )}
         </div>
@@ -1032,15 +1061,31 @@ export default function CollectionPage() {
                     key={String(card.id)}
                     onClick={() =>
                       isBatchMode
-                        ? handleBatchAdd(String(card.id))
+                        ? handleBatchUpdate(String(card.id), 1)
                         : openCardDetail(card)
                     }
                     className={`group relative overflow-hidden rounded-[1.5rem] border p-3 text-left transition-all duration-500 active:scale-95 flex flex-col justify-between h-full animate-in fade-in slide-in-from-bottom-2 ${
-                      totalQuantity > 0
-                        ? "bg-white border-blue-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgba(37,99,235,0.1)]"
-                        : "bg-slate-50 border-slate-300 opacity-60"
+                      isBatchMode && batchPUid && (stats?.profileQuantities[normalizePUid(batchPUid)] || 0) > 0
+                        ? "bg-blue-50 border-blue-400 shadow-lg scale-[1.02] z-10"
+                        : totalQuantity > 0
+                          ? "bg-white border-blue-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgba(37,99,235,0.1)]"
+                          : "bg-slate-50 border-slate-300 opacity-60"
                     }`}
                   >
+                    {/* Minus button for batch mode corrections */}
+                    {isBatchMode && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleBatchUpdate(String(card.id), -1);
+                        }}
+                        className="absolute top-2 left-2 w-8 h-8 bg-white/90 backdrop-blur text-slate-400 hover:text-red-500 rounded-xl shadow-sm border border-slate-100 flex items-center justify-center active:scale-90 z-20 transition-colors"
+                        title="減少"
+                      >
+                        <Minus size={16} strokeWidth={3} />
+                      </button>
+                    )}
+
                     {/* Accent line for owned cards */}
                     {totalQuantity > 0 && (
                       <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-400 to-indigo-600" />
@@ -1077,12 +1122,13 @@ export default function CollectionPage() {
                       )}
                       {totalQuantity}
                     </div>
-                    <div className="flex-1">
+                    <div className={`flex-1 ${isBatchMode ? 'pl-8' : ''}`}>
                       <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate pr-6">
                         {card.pack || "No Pack"}
                       </p>
                       <h2 className="text-[10px] font-black text-slate-900 leading-tight break-words mb-2 pr-4">
                         {display.name}
+                        {card.subtype && <span className="ml-1 text-blue-500/70">({card.subtype})</span>}
                       </h2>
                     </div>
                     <div className="mt-auto space-y-1">
@@ -1175,7 +1221,7 @@ export default function CollectionPage() {
                 <div className="flex-1 min-w-0 p-6 overflow-y-auto no-scrollbar animate-in fade-in slide-in-from-left-2 duration-300 min-h-0 pb-28">
                   {filterCategory === "sort" && (
                     <div className="space-y-2">
-                      {["rank-desc", "rank-asc", "name-asc", "pack-asc"].map(
+                      {["id-asc", "rank-desc", "rank-asc", "name-asc", "pack-asc"].map(
                         (id) => (
                           <button
                             key={id}
@@ -1186,13 +1232,15 @@ export default function CollectionPage() {
                                 : "bg-white border-slate-100 text-slate-400"
                             }`}
                           >
-                            {id === "rank-desc"
-                              ? "ランク高い順"
-                              : id === "rank-asc"
-                                ? "ランク低い順"
-                                : id === "name-asc"
-                                  ? "名前順"
-                                  : "パック順"}
+                            {id === "id-asc"
+                              ? "番号順"
+                              : id === "rank-desc"
+                                ? "ランク高い順"
+                                : id === "rank-asc"
+                                  ? "ランク低い順"
+                                  : id === "name-asc"
+                                    ? "名前順"
+                                    : "パック順"}
                           </button>
                         ),
                       )}
@@ -1316,7 +1364,7 @@ export default function CollectionPage() {
                       setFilterProfiles([]);
                       setFilterOwnership("all");
                       setSearchQuery("");
-                      setSortBy("rank-desc");
+                      setSortBy("id-asc");
                     }}
                     className="flex-1 h-12 rounded-2xl bg-slate-50 text-slate-600 border border-slate-100 text-[10px] font-black uppercase tracking-[0.2em] active:scale-[0.98] transition-transform"
                   >

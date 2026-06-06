@@ -935,7 +935,12 @@ function ResultEditCard({ data, onRemove, onClick, profiles, activeProfileId, on
       <div className="flex-1 min-w-0 py-3 pr-1">
         <div className="flex items-start justify-between gap-2">
           <h3 className={`text-[13px] font-black uppercase tracking-tight leading-tight truncate ${display.isUnknown || isIdManual || !data.name || !data.pack ? 'text-rose-600' : 'text-slate-900'}`}>
-            {!data.name ? 'カード名未入力' : !data.pack ? 'パック未入力' : (isIdManual ? data.name : display.name)}
+            {!data.name ? 'カード名未入力' : !data.pack ? 'パック未入力' : (
+              <>
+                {isIdManual ? data.name : display.name}
+                {data.subtype && <span className="ml-1.5 text-blue-500/70 font-bold">({data.subtype})</span>}
+              </>
+            )}
           </h3>
           <span className="flex-shrink-0 text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg">
             x{data.quantity || 1}

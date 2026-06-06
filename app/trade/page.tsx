@@ -15,6 +15,7 @@ interface Card {
   image_url?: string;
   rank?: number;
   pack?: string;
+  subtype?: string;
 }
 
 interface CollectionRecord {
@@ -288,6 +289,7 @@ export default function TradePage() {
                         </div>
                         <h3 className="text-sm font-bold text-slate-900 leading-tight uppercase tracking-tight truncate">
                           {display.name}
+                          {card.subtype && <span className="ml-1 text-blue-500/70 text-[10px]">({card.subtype})</span>}
                         </h3>
                       </div>
                       <div className="flex items-center gap-1 text-slate-500 mt-1">
