@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { inputAI } from './utils'; // 💡 空間結合版の inputAI を読み込み
@@ -111,6 +111,8 @@ export default function ScannerPage() {
   const [isEditDetailsModalOpen, setIsEditDetailsModalOpen] = useState(false);
   const [isSubtypeSelectionScreenOpen, setIsSubtypeSelectionScreenOpen] = useState(false);
   const [editingResultData, setEditingResultData] = useState<ScannedCardResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
 
   const [alertConfig, setAlertConfig] = useState<AlertConfigState>({
     isOpen: false,
@@ -139,6 +141,17 @@ export default function ScannerPage() {
     [results]
   );
   const canUseAiScan = Boolean(process.env.NEXT_PUBLIC_ROBOFLOW_API_KEY);
+
+  useEffect(() => {
+    if (folderInputRef.current) {
+      (folderInputRef.current as any).webkitdirectory = true;
+      (folderInputRef.current as any).directory = true;
+    }
+  }, []);
+
+  const triggerFolderInput = () => {
+    folderInputRef.current?.click();
+  };
 
   useEffect(() => {
     setHasMounted(true);
@@ -629,14 +642,24 @@ export default function ScannerPage() {
           {viewMode === 'capture' && ( 
             <section className="bg-white rounded-[2rem] shadow-sm border border-slate-200/60 overflow-hidden">
               {images.length === 0 ? (
-                <label className="flex flex-col items-center justify-center py-16 px-6 cursor-pointer group">
-                  <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
-                  <div className="w-20 h-20 rounded-[2rem] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-xl shadow-blue-200/50 mb-5 group-active:scale-95 transition-transform">
-                    <Camera size={32} className="text-white" strokeWidth={2} />
-                  </div>
-                  <p className="text-sm font-black text-slate-900 uppercase tracking-tight">写真を追加</p>
-                  <p className="text-[10px] font-bold text-slate-400 mt-1">タップして選択 · 複数枚OK</p>
-                </label>
+                <div className="flex flex-col items-center justify-center py-16 px-6 gap-3">
+                  <label className="flex flex-col items-center justify-center cursor-pointer group">
+                    <input ref={fileInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+                    <div className="w-20 h-20 rounded-[2rem] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-xl shadow-blue-200/50 mb-5 group-active:scale-95 transition-transform">
+                      <Camera size={32} className="text-white" strokeWidth={2} />
+                    </div>
+                    <p className="text-sm font-black text-slate-900 uppercase tracking-tight">写真を追加</p>
+                    <p className="text-[10px] font-bold text-slate-400 mt-1">タップして選択 · 複数枚OK</p>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={triggerFolderInput}
+                    className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800 transition-colors"
+                  >
+                    写真フォルダを選択
+                  </button>
+                  <input ref={folderInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+                </div>
               ) : (
                 <div className="p-4">
                   <div className="grid grid-cols-2 gap-3">
