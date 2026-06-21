@@ -1,5 +1,6 @@
 import './globals.css';
 import { TabBar } from './components/TabBar';
+import { ScannerFab } from './components/ScannerFab';
 import { AuthProvider } from '../AuthContext';
 import { Metadata, Viewport } from 'next';
 
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="min-h-screen">
             {children}
           </div>
+          <ScannerFab />
           <TabBar />
         </AuthProvider>
       </body>

@@ -3,11 +3,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { inputAI } from './utils';
+import { inputAI } from './utils'; // 💡 空間結合版の inputAI を読み込み
 import Image from 'next/image';
-import { resolveCardDisplay } from '../components/utils';
-import { supabase } from '../supabase';
-import { ensureProfiles } from '../profileStore';
+import { supabase } from '../../supabase';
+import { ensureProfiles } from '../../profileStore';
 import {
   addCustomMasterCards,
   getCachedMasterData,
@@ -21,7 +20,7 @@ import {
   setCachedMasterData,
   setCachedProfiles,
   upsertCachedCollection,
-} from '../offline';
+} from '../../offline';
 
 const fetchWithTimeout = async (input: RequestInfo, init: RequestInit = {}, timeoutMs = 20000) => {
   const controller = new AbortController();
@@ -32,8 +31,8 @@ const fetchWithTimeout = async (input: RequestInfo, init: RequestInit = {}, time
     window.clearTimeout(timeoutId);
   }
 };
-import { CustomAlert } from '../components/CustomAlert';
-import { useAuth } from '../../AuthContext';
+import { CustomAlert } from '../../components/CustomAlert';
+import { useAuth } from '../../../AuthContext';
 import {
   AlertCircle,
   Box,
@@ -41,19 +40,13 @@ import {
   Award,
   Check,
   ChevronLeft,
-  Cloud,
-  CloudOff,
   Edit3,
   Layers,
   Plus,
   Save,
-  RotateCcw,
-  Search,
-  Sparkles,
-  Star,
   Trash2,
-  User,
   X,
+  Sparkles,
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -355,7 +348,7 @@ export default function ScannerPage() {
       for (let i = 0; i < images.length; i += 1) {
         setStatus(`${i + 1}/${images.length}枚目を解析中...`);
         
-        // 💡 【修正点】新しい並列対応・全体OCR版の `inputAI` を使用
+        // 💡 空間結合・部分OCR版の新しい `inputAI` を実行（配列で複数カードが返ってくる）
         const parsed = (await inputAI(images[i], masterData) as ScannedCardResult[])
           .map((card) => ({
             ...card,
@@ -367,10 +360,13 @@ export default function ScannerPage() {
         if (parsed.length > 0) {
           totalFoundCount += parsed.length;
           setViewMode('review');
+          
           setResults((prev) => {
             const consolidatedResults = new Map<string, ScannedCardResult>();
+            // 既存の結果をマップに退避
             prev.forEach(res => consolidatedResults.set(res.id, { ...res }));
             
+            // 新しく検出されたカードたちを同一IDごとに数量マージ
             parsed.forEach(newCard => {
               const addQty = newCard.quantity || 1; 
               if (consolidatedResults.has(newCard.id)) {
@@ -390,7 +386,7 @@ export default function ScannerPage() {
       if (totalFoundCount === 0) {
         showAlert('Result', 'カードを検出できませんでした。角度を変えて撮り直すか、手動追加してください。', 'info');
       } else {
-        setCustomAlert(`${totalFoundCount}件を解析しました。`);
+        setCustomAlert(`${totalFoundCount}件のカード情報を統合解析しました。`);
       }
 
       window.scrollTo({ top: 320, behavior: 'smooth' });
@@ -574,7 +570,7 @@ export default function ScannerPage() {
             </Link>
             <div className="flex-1 ml-4">
               <h1 className="text-xl font-black italic text-slate-900 uppercase tracking-tighter">
-                カード自動追加
+                direct add
               </h1>
             </div>
           </div>
@@ -723,7 +719,9 @@ export default function ScannerPage() {
                       );
                     })}
                   </div>
-                  <div className="h-32" />
+
+                  {/* 下部固定バーとの被りを防ぐための底上げ用スペーサー */}
+                  <div className="h-28" />
                 </>
               ) : (
                 <div className="py-20 text-center space-y-4 bg-white rounded-[2rem] border border-slate-100 shadow-sm">
@@ -778,6 +776,122 @@ export default function ScannerPage() {
           </div>
         </div>
 
+        {/* 1. 詳細編集用モーダル */}
+        {isEditDetailsModalOpen && editingResultData && selectedResultIndex !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150">
+              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="text-sm font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                  <Edit3 size={16} className="text-blue-500" /> カード情報の編集
+                </h3>
+                <button type="button" onClick={() => { setIsEditDetailsModalOpen(false); setEditingResultData(null); }} className="text-slate-400 hover:text-slate-600 p-1">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5">カード名</label>
+                  <input
+                    type="text"
+                    value={editingResultData.name}
+                    onChange={(e) => setEditingResultData({ ...editingResultData, name: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="カード名を入力"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5">パック名・シリーズ名</label>
+                  <input
+                    type="text"
+                    value={editingResultData.pack}
+                    onChange={(e) => setEditingResultData({ ...editingResultData, pack: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="パック名を入力"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5">点数 (星の数)</label>
+                    <select
+                      value={editingResultData.stars}
+                      onChange={(e) => setEditingResultData({ ...editingResultData, stars: Number(e.target.value) })}
+                      className="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500"
+                    >
+                      {CONFIG.ranks.map(r => <option key={r} value={r}>{r}点</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1.5">数量 (枚数)</label>
+                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                      <button type="button" onClick={() => setEditingResultData({ ...editingResultData, quantity: Math.max(1, editingResultData.quantity - 1) })} className="px-3 py-3 text-slate-500 font-bold hover:bg-slate-100 active:scale-95">-</button>
+                      <span className="flex-1 text-center text-xs font-black text-slate-900">{editingResultData.quantity}</span>
+                      <button type="button" onClick={() => setEditingResultData({ ...editingResultData, quantity: editingResultData.quantity + 1 })} className="px-3 py-3 text-slate-500 font-bold hover:bg-slate-100 active:scale-95">+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateResult(selectedResultIndex, 'all', editingResultData, true)}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] uppercase tracking-widest rounded-xl shadow-md transition-colors"
+                >
+                  反映する
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. 新旧（サブタイプ）選択用画面モーダル */}
+        {isSubtypeSelectionScreenOpen && editingResultData && selectedResultIndex !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150">
+              <div className="p-6 text-center border-b border-slate-100">
+                <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Award size={24} />
+                </div>
+                <h3 className="text-sm font-black text-slate-900">新旧（サブタイプ）の選択</h3>
+                <p className="text-[11px] font-medium text-slate-400 mt-1">「{editingResultData.name}」には複数のバージョンがあります。どちらのカードか選択してください。</p>
+              </div>
+              <div className="p-4 max-h-60 overflow-y-auto space-y-2 bg-slate-50/50">
+                {Array.from(new Set(
+                  masterData
+                    .filter(m => String(m.name).toLowerCase() === String(editingResultData.name).toLowerCase() && Number(m.rank ?? 0) === Number(editingResultData.stars ?? 0))
+                    .map(m => m.subtype)
+                )).filter(Boolean).map((subtype) => (
+                  <button
+                    key={subtype}
+                    type="button"
+                    onClick={() => {
+                      updateResult(selectedResultIndex, 'subtype', subtype);
+                      setIsSubtypeSelectionScreenOpen(false);
+                      setEditingResultData(null);
+                    }}
+                    className="w-full p-4 bg-white hover:bg-slate-50 border border-slate-200/80 rounded-xl text-left text-xs font-black text-slate-800 shadow-sm flex items-center justify-between group active:scale-[0.99] transition-all"
+                  >
+                    <span>{subtype}</span>
+                    <Check size={14} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ))}
+              </div>
+              <div className="p-3 bg-slate-50 border-t border-slate-100 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateResult(selectedResultIndex, 'subtype', 'その他');
+                    setIsSubtypeSelectionScreenOpen(false);
+                    setEditingResultData(null);
+                  }}
+                  className="w-full py-2.5 bg-slate-200 text-slate-600 font-bold text-[10px] uppercase tracking-widest rounded-lg hover:bg-slate-300 transition-colors"
+                >
+                  スキップ（その他にする）
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Custom Alerts */}
         {alertConfig.isOpen && (
           <CustomAlert
@@ -799,11 +913,9 @@ export default function ScannerPage() {
   );
 }
 
-// 💡 重複していた className を統合してすっきりさせました
 function ResultEditCard({ data, onRemove, onClick, profiles, activeProfileId, onProfileChange, isSubtypeMissing }: any) {
   return (
     <div className={`p-4 bg-white border rounded-2xl flex items-center justify-between shadow-sm ${isSubtypeMissing ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200/60'}`}>
-      {/* ↓ ここを修正: onClick を残しつつ className を一本化 */}
       <div onClick={onClick} className="cursor-pointer flex items-center gap-3 flex-1 min-w-0">
         <div className="relative w-12 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
           {data.croppedImg ? (
@@ -823,11 +935,32 @@ function ResultEditCard({ data, onRemove, onClick, profiles, activeProfileId, on
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-2 ml-2">
-        <span className="text-xs font-black px-2 py-1 bg-slate-100 rounded-lg">x{data.quantity}</span>
-        <button type="button" onClick={onRemove} className="p-2 text-slate-300 hover:text-red-500 rounded-xl">
-          <X size={16} />
-        </button>
+      <div className="flex items-center gap-3 ml-2">
+        {profiles.length > 1 && (
+          <select
+            value={activeProfileId || ''}
+            onChange={(e) => onProfileChange(e.target.value)}
+            className="text-[10px] font-bold bg-slate-50 border border-slate-200 rounded-lg px-1.5 py-1 text-slate-600 focus:outline-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {profiles.map((p: any) => (
+              <option key={p.id} value={p.id}>{p.display_name}</option>
+            ))}
+          </select>
+        )}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-black px-2 py-1 bg-slate-100 rounded-lg">x{data.quantity}</span>
+          <button 
+            type="button" 
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }} 
+            className="p-2 text-slate-300 hover:text-red-500 rounded-xl"
+          >
+            <X size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );

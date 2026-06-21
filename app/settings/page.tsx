@@ -11,8 +11,8 @@ import {
   AlertTriangle,
   Users,
   Monitor,
-  Bell,
-  Sliders
+  Sliders,
+  PlusCircle
 } from 'lucide-react';
 import { 
   getCachedUserId,
@@ -59,8 +59,8 @@ export default function SettingsPage() {
       if (effectiveUserId) {
         const profileList = await listProfiles(effectiveUserId);
         const mappedProfiles = (profileList || []).map(p => ({
-          ...p,
-          id: p.id.toString()
+          id: p.p_uid,
+          display_name: p.name
         }));
         setCachedProfiles(mappedProfiles);
       }
@@ -133,10 +133,10 @@ export default function SettingsPage() {
               subtitle="実装予定" 
             />
             <SettingsLink 
-              href="/settings/notifications" 
-              icon={<Bell size={18} className="text-pink-500" />} 
-              title="Notifications" 
-              subtitle="実装予定" 
+              href="/settings/direct_add" 
+              icon={<PlusCircle size={18} className="text-pink-500" />} 
+              title="Direct Add" 
+              subtitle="カードを直接バインダーに追加" 
             />
             <SettingsPlanned
               icon={<Sliders size={18} className="text-purple-500" />} 
