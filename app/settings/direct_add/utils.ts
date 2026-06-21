@@ -48,6 +48,7 @@ async function detectObjects(base64Image: string, projectUrl: string): Promise<R
   }
 }
 
+// 💡 クッキリ画質化：拡大時にブラウザの補間（ボカシ）を完全に切り、ドット単位でシャットアウトする
 function getCroppedBase64(imgElement: HTMLImageElement, pred: RoboflowPrediction, scale = 4): string {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -59,16 +60,25 @@ function getCroppedBase64(imgElement: HTMLImageElement, pred: RoboflowPrediction
   canvas.width = pred.width * scale;
   canvas.height = pred.height * scale;
 
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+  // 🔥 【超重要】拡大時のスムーズ処理（ボカシ）を完全に無効化
+  ctx.imageSmoothingEnabled = false;
 
+  // 💡 主要なブラウザ（Chrome, Safari, Firefox）のキャンバスコンテキストに対して
+  // ピクセルを等倍でクッキリ引き伸ばすプロパティを強制セット
+  (ctx as any).mozImageSmoothingEnabled = false;
+  (ctx as any).webkitImageSmoothingEnabled = false;
+  (ctx as any).msImageSmoothingEnabled = false;
+
+  // 元画像の(sx, sy)から切り出し、キャンバス全体へドットを維持したまま拡大描画
   ctx.drawImage(
     imgElement, 
     sx, sy, pred.width, pred.height, 
     0, 0, canvas.width, canvas.height
   );
 
-  return canvas.toDataURL('image/jpeg', 1.0);
+  // 圧縮ノイズを防ぐため、最高品質(1.0)のJPEG、またはPNG（劣化なし）で書き出し
+  // ※より確実な文字の輪郭維持のため、ここではPNG形式に変更しています
+  return canvas.toDataURL('image/png');
 }
 
 async function runOcr(croppedBase64: string, lang = 'jpn+eng'): Promise<string> {
