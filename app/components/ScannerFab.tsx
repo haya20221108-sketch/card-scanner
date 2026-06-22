@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Camera } from 'lucide-react';
 import { createWorker } from 'tesseract.js';
 import { resolveCardDisplay } from './utils';
+import { isPublicPath } from './AuthGate';
 
 const API_KEY_ROBO = process.env.NEXT_PUBLIC_ROBOFLOW_API_KEY;
 const PROJECT_CARD = 'card-tvjwd/1';
@@ -252,10 +253,10 @@ export async function directAI(base64Image: string, masterData: any[]) {
 export function ScannerFab() {
   const pathname = usePathname();
 
-  // ルートパス、またはスキャン実行画面そのものではボタンを非表示にする
+  // 公開ページ、またはスキャン実行画面そのものではボタンを非表示にする
   // "/direct_add" など、スキャンを呼び出したい画面では表示されるようにします
-  const hiddenPaths = ['/', '/scanner'];
-  if (!pathname || hiddenPaths.includes(pathname)) return null;
+  const hiddenPaths = ['/scanner'];
+  if (!pathname || isPublicPath(pathname) || hiddenPaths.includes(pathname)) return null;
 
   return (
     <div className="fixed bottom-28 left-1/2 -translate-x-1/2 w-full max-w-md px-5 flex justify-end z-40 pointer-events-none">

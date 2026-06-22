@@ -1,6 +1,7 @@
 import './globals.css';
 import { TabBar } from './components/TabBar';
 import { ScannerFab } from './components/ScannerFab';
+import { AuthGate } from './components/AuthGate';
 import { AuthProvider } from '../AuthContext';
 import { Metadata, Viewport } from 'next';
 
@@ -24,11 +25,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ja">
       <body className="antialiased bg-slate-50">
         <AuthProvider>
-          <div className="min-h-screen">
-            {children}
-          </div>
-          <ScannerFab />
-          <TabBar />
+          <AuthGate>
+            <div className="min-h-screen">
+              {children}
+            </div>
+            <ScannerFab />
+            <TabBar />
+          </AuthGate>
         </AuthProvider>
       </body>
     </html>

@@ -7,6 +7,12 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '../AuthContext';
 import { Mail, Lock, LogIn, Zap, X, Eye, EyeOff } from 'lucide-react';
 
+function getSafeRedirect() {
+  if (typeof window === 'undefined') return '/home';
+  const redirect = new URLSearchParams(window.location.search).get('redirect');
+  return redirect?.startsWith('/') && !redirect.startsWith('//') ? redirect : '/home';
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
@@ -16,10 +22,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 既にセッションがある場合はホームへ
+  // 既にセッションがある場合は元の画面へ
   useEffect(() => {
     if (!authLoading && user) {
-      router.push('/home');
+      router.push(getSafeRedirect());
     }
   }, [user, authLoading, router]);
 
@@ -30,7 +36,7 @@ export default function LoginPage() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push('/home');
+      router.push(getSafeRedirect());
     } catch (authError: any) {
       setError(authError.message);
       setLoading(false);

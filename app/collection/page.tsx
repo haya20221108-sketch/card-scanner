@@ -31,7 +31,6 @@ import {
   getCachedMasterData,
   getCachedRawCollection,
   getCachedProfiles,
-  getCachedUserId,
   getDbBackedProfiles,
   getOnlineStatus,
   rememberUserId,
@@ -226,7 +225,7 @@ export default function CollectionPage() {
       let collData: CollectionRecord[] = [];
 
       if (isOnline) {
-        const userId = user?.uid || getCachedUserId();
+        const userId = user?.uid;
         rememberUserId(userId);
         if (userId) {
           let freshProfiles: Profile[] = profData;
@@ -535,7 +534,7 @@ export default function CollectionPage() {
   const handleSave = async () => {
     if (!selectedCard) return;
 
-    const userId = user?.uid || getCachedUserId();
+    const userId = user?.uid;
     rememberUserId(userId);
     if (!userId) {
       showAlert(
@@ -650,7 +649,7 @@ export default function CollectionPage() {
       return;
     }
 
-    const userId = user?.uid || getCachedUserId();
+    const userId = user?.uid;
     rememberUserId(userId);
     if (!userId) {
       showAlert(

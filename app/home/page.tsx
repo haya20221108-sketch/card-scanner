@@ -12,7 +12,6 @@ import {
   getCachedMasterData,
   getCachedProfiles,
   getCachedRawCollection,
-  getCachedUserId,
   getDbBackedProfiles,
   getOnlineStatus,
   rememberUserId,
@@ -52,13 +51,19 @@ export default function HomePage() {
 
     const initializeData = async (isCurrentlyOnline: boolean) => {
       if (!isMounted) return;
+      setLoading(true);
       setIsOnline(isCurrentlyOnline);
 
       if (!isCurrentlyOnline) {
         setCustomAlert("現在オフラインです。キャッシュから読み込んでいます。");
       }
 
-      const effectiveUserId = user?.uid || getCachedUserId() || 'offline-user';
+      if (!user?.uid) {
+        setLoading(false);
+        return;
+      }
+
+      const effectiveUserId = user.uid;
       rememberUserId(user?.uid);
       setUserId(effectiveUserId);
 
@@ -66,7 +71,7 @@ export default function HomePage() {
       setMasterMap(new Map(masterData.map((m: any) => [String(m.id), m])));
 
       let profileList = getCachedProfiles();
-      if (isCurrentlyOnline && user?.uid) {
+      if (isCurrentlyOnline) {
         const freshProfiles = await ensureProfiles(user.uid);
         profileList = freshProfiles;
         setCachedProfiles(freshProfiles);
@@ -117,6 +122,7 @@ export default function HomePage() {
 
     const fetchStats = () => { // Made synchronous as it only uses local cache
       if (!isMounted) return;
+      setLoading(true);
       let data: any[] = [];
       
       data = getCachedRawCollection().filter((item: any) => {
@@ -136,6 +142,7 @@ export default function HomePage() {
       });
 
       setStats({ total: data.reduce((acc, curr) => acc + curr.quantity, 0), byRank: rankCounts });
+      setLoading(false);
     }; 
 
     fetchStats();

@@ -15,7 +15,6 @@ import {
   PlusCircle
 } from 'lucide-react';
 import { 
-  getCachedUserId,
   getOnlineStatus,
   setCachedMasterData,
   setCachedProfiles
@@ -34,7 +33,7 @@ export default function SettingsPage() {
   const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => { // No dependencies, runs once on mount
-    setUserId(user?.uid || getCachedUserId());
+    setUserId(user?.uid || null);
     setIsOnline(getOnlineStatus());
   }, [user]);
 
@@ -55,7 +54,7 @@ export default function SettingsPage() {
       setCachedMasterData(filtered);
       
       // クラウドからプロフィールの再同期も行う
-      const effectiveUserId = user?.uid || userId || getCachedUserId();
+      const effectiveUserId = user?.uid || userId;
       if (effectiveUserId) {
         const profileList = await listProfiles(effectiveUserId);
         const mappedProfiles = (profileList || []).map(p => ({
@@ -90,7 +89,7 @@ export default function SettingsPage() {
              <User size={80} />
           </div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1">Active Session</p>
-          <h2 className="text-lg font-black truncate">{user?.email || 'Guest User'}</h2>
+          <h2 className="text-lg font-black truncate">{user?.email || '未ログイン'}</h2>
           <div className="mt-4 flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-red-400'}`} />
             <span className="text-[10px] font-bold uppercase tracking-tight text-slate-400">{isOnline ? 'Nexus Online' : 'Offline Mode'}</span>

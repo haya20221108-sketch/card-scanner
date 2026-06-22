@@ -12,7 +12,6 @@ import {
   getCachedMasterData,
   getCachedProfiles,
   getCachedRawCollection,
-  getCachedUserId,
   getOnlineStatus,
   normalizePUid,
   queueCollectionChange,
@@ -475,8 +474,13 @@ export default function ScannerPage() {
     setStatus('保存中...');
     try {
       const sessionUserId = user?.uid || null;
+      if (!sessionUserId) {
+        showAlert('Auth Required', 'ログインしてから保存してください。', 'error');
+        return;
+      }
+
       rememberUserId(sessionUserId);
-      const userId = sessionUserId || getCachedUserId() || 'offline-user';
+      const userId = sessionUserId;
       let queuedCount = 0;
       
       const customCards: MasterCard[] = results

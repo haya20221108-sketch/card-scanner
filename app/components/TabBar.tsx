@@ -3,12 +3,13 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Layers, ArrowLeftRight, Calendar, Settings } from 'lucide-react';
+import { isPublicPath } from './AuthGate';
 
 export function TabBar() {
   const pathname = usePathname();
   
-  // ログインページでは何も表示しない
-  if (pathname === '/') return null; // ルートパスがログインページなので、タブバーは表示しない
+  // 公開ページでは何も表示しない
+  if (isPublicPath(pathname)) return null;
 
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/90 backdrop-blur-xl border-t border-slate-100 px-6 py-4 pb-8 flex justify-between items-center z-50 rounded-t-[2rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)]">
