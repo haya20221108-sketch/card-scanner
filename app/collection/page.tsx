@@ -107,16 +107,16 @@ export default function CollectionPage() {
   const [filterPack, setFilterPack] = useState<string>("");
   const [filterRanks, setFilterRanks] = useState<number[]>([]);
   const [filterProfiles, setFilterProfiles] = useState<string[]>([]);
+  const [filterMember, setFilterMember] = useState<string[]>([]);
+  const [filterSubtype, setFilterSubtype] = useState<string[]>([]);
   const [filterOwnership, setFilterOwnership] = useState<
     "all" | "owned" | "unowned"
   >("all");
   const [filterCategory, setFilterCategory] = useState<
-    "sort" | "pack" | "rank" | "user" | "actions"
-  >("sort");
-
-  // Sorting
+  "status" | "member" | "pack" | "rank" | "type" | "sort"
+  >("status");
   const [sortBy, setSortBy] = useState<
-    "id-asc" | "rank-asc" | "rank-desc" | "name-asc" | "pack-asc"
+    "id-asc" | "rank-desc" | "rank-asc" | "name-asc" | "pack-asc"
   >("id-asc");
 
   // Modal
@@ -346,15 +346,41 @@ export default function CollectionPage() {
     );
   }, [allCards]);
 
+  const allsubtypes = useMemo(() => {
+    return Array.from(
+      new Set(allCards.map((c) => c.subtype).filter(Boolean)),
+    ).sort();
+  }, [allCards]);
+
+  const allMembers = useMemo(() => {
+    const members = new Set<string>();
+    allCards.forEach((card) => {
+      if (!card.name) return;
+      const member = card.name.split(" ")[0]; // 仮に名前の最初の単語をメンバー名とする
+      if (member) members.add(member);
+    });
+    return Array.from(members).sort();
+  }, [allCards]);
+
   const activeFilterCount = useMemo(() => {
-    return [
-      filterPack,
-      filterRanks.length > 0,
-      filterProfiles.length > 0,
-      filterOwnership !== "all",
-      sortBy !== "id-asc",
-    ].filter(Boolean).length;
-  }, [filterPack, filterRanks, filterProfiles, filterOwnership, sortBy]);
+  return [
+    filterPack,
+    filterRanks.length > 0,
+    filterProfiles.length > 0,
+    filterSubtype.length > 0,
+    filterMember.length > 0,
+    filterOwnership !== "all",
+    sortBy !== "id-asc",
+   ].filter(Boolean).length;
+   }, [
+   filterPack,
+   filterRanks,
+   filterProfiles,
+   filterSubtype,
+   filterMember,
+   filterOwnership,
+   sortBy,
+  ]);
 
   // =========================
   // Stats Map
@@ -417,6 +443,16 @@ export default function CollectionPage() {
       // パック
       if (filterPack && card.pack !== filterPack) return false;
 
+      if (filterSubtype.length > 0 && !filterSubtype.includes(card.subtype || ""))
+        return false;
+
+      if (filterMember.length > 0) {
+        const matched = filterMember.some((member) =>
+          card.name?.startsWith(member),
+        );
+        if (!matched) return false;
+      }
+
       // プロファイル（アカウント）
       if (filterProfiles.length > 0) {
         const isOwnedBySelected = filterProfiles.some(
@@ -457,6 +493,8 @@ export default function CollectionPage() {
     cardStatsMap,
     sortBy,
     cardNameById,
+    filterSubtype,
+    filterMember,
   ]);
 
   // =========================
@@ -1190,11 +1228,12 @@ export default function CollectionPage() {
                 {/* Stage 1: Categories (Left) */}
                 <div className="w-24 shrink-0 bg-slate-50 border-r border-slate-100 flex flex-col min-h-0">
                   {[
-                    { id: "sort", label: "順序", icon: SlidersHorizontal },
-                    { id: "pack", label: "パック", icon: Package },
-                    { id: "rank", label: "ランク", icon: Award },
-                    { id: "user", label: "アカ", icon: User },
-                    { id: "actions", label: "管理", icon: Settings2 },
+                    { id: "status", label: "状態", icon: Inbox },
+                    { id: "member", label: "メンバー", icon: User },
+                    { id: "pack", label: "シリーズ", icon: Package },
+                    { id: "rank", label: "レア度", icon: Award },
+                    { id: "type", label: "種類", icon: Star },
+                    { id: "sort", label: "並び", icon: SlidersHorizontal },
                   ].map((cat) => {
                     const Icon = cat.icon;
                     return (
@@ -1297,59 +1336,46 @@ export default function CollectionPage() {
                       ))}
                     </div>
                   )}
-
-                  {filterCategory === "user" && (
+                  {filterCategory === "member" && (
                     <div className="space-y-2">
-                      {profiles.map((p) => (
+                      {allMembers.map((member) => (
                         <button
-                          key={p.id}
+                          key={member}
                           onClick={() =>
-                            setFilterProfiles((prev) =>
-                              prev.includes(p.id)
-                                ? prev.filter((x) => x !== p.id)
-                                : [...prev, p.id],
+                            setFilterMember((prev) =>
+                              prev.includes(member)
+                                ? prev.filter((x) => x !== member)
+                                : [...prev, member]
                             )
                           }
                           className={`w-full py-4 px-4 rounded-2xl text-[10px] font-black text-left uppercase transition-all border ${
-                            filterProfiles.includes(p.id)
-                              ? "bg-blue-600 border-blue-600 text-white shadow-md"
+                            filterMember.includes(member)
+                              ? "bg-green-100 border-green-200 text-blue-600"
                               : "bg-white border-slate-100 text-slate-400"
                           }`}
+                        >{member}</button>
+                      ))}
+                   </div>
+                  )}
+                  {filterCategory === "type" && (
+                    <div className="space-y-2">
+                      {allsubtypes.map((type) => (
+                        <button
+                          key={type}
+                          onClick={() =>
+                            setFilterSubtype((prev) =>
+                              prev.includes(type)
+                                ? prev.filter((x) => x !== type)
+                                : [...prev, type]
+                            )
+                          }
                         >
-                          {p.display_name}
+                          {type}
                         </button>
                       ))}
                     </div>
                   )}
-
-                  {filterCategory === "actions" && (
-                    <div className="space-y-4">
-                      <button
-                        onClick={handleSyncMaster}
-                        className="w-full flex items-center justify-between py-5 px-6 bg-slate-50 rounded-2xl text-[10px] font-black uppercase text-slate-700 active:scale-95"
-                      >
-                        <span>マスター同期</span>
-                        <RefreshCw size={14} className="text-blue-500" />
-                      </button>
-                      <button
-                        onClick={toggleBatchMode}
-                        className={`w-full flex items-center justify-between py-5 px-6 rounded-2xl text-[10px] font-black uppercase transition-all active:scale-95 ${
-                          isBatchMode
-                            ? "bg-blue-600 text-white shadow-lg shadow-blue-100"
-                            : "bg-slate-50 text-slate-700"
-                        }`}
-                      >
-                        <span>一括追加モード</span>
-                        <Zap
-                          size={14}
-                          className={
-                            isBatchMode ? "text-white" : "text-blue-500"
-                          }
-                        />
-                      </button>
-                    </div>
-                  )}
-                </div>
+                 </div>
               </div>
 
               {/* Footer */}
@@ -1364,6 +1390,8 @@ export default function CollectionPage() {
                       setFilterOwnership("all");
                       setSearchQuery("");
                       setSortBy("id-asc");
+                      setFilterMember([]);
+                      setFilterSubtype([]);
                     }}
                     className="flex-1 h-12 rounded-2xl bg-slate-50 text-slate-600 border border-slate-100 text-[10px] font-black uppercase tracking-[0.2em] active:scale-[0.98] transition-transform"
                   >
