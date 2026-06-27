@@ -27,9 +27,11 @@ interface CollectionRecord {
 // アカウントごとの状態を定義する型
 interface AccountStatus {
   p_uid: string;
+  name: string;
   total: number;
   tradeable: number;
   isOwner: boolean;
+  isMain: boolean; // ★本アカウントフラグを追加
   offeredCards: { id: string; name: string; pack?: string }[];
 }
 
@@ -41,9 +43,11 @@ export default function TradePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [alert, setAlert] = useState({ isOpen: false, title: '', message: '', type: 'info' as 'info' | 'error' | 'success' });
   const [profiles, setProfiles] = useState<any[]>([]);
+  
+  // dbProfilesに is_main カラムが含まれていることを想定
   const dbProfiles = useMemo(() => getDbBackedProfiles(profiles), [profiles]);
   
-  // ★詳細を確認するために選択されたカードのState
+  // 詳細を確認するために選択されたカードのState
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
 
   const loadData = useCallback(async () => {
@@ -86,38 +90,67 @@ export default function TradePage() {
     loadData();
   }, [loadData]);
 
-  // カード全体の統計（グリッド表示用）
+  // ★本垢登録の切り替え関数
+  const toggleMainAccount = async (profileId: string, currentStatus: boolean) => {
+    try {
+      // 本アカウントは1ユーザーにつき1つのみの想定のため、新しく有効化する場合は他をすべてfalseにする
+      if (!currentStatus) {
+        await supabase.from('profiles').update({ is_main: false }).match({ user_id: user?.uid });
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_main: !currentStatus })
+        .eq('id', profileId);
+
+      if (error) throw error;
+
+      setAlert({ isOpen: true, title: '成功', message: '本アカウント設定を更新しました', type: 'success' });
+      loadData(); 
+    } catch (err) {
+      setAlert({ isOpen: true, title: 'エラー', message: '設定の更新に失敗しました', type: 'error' });
+    }
+  };
+
+  // ★カード全体の統計（本アカウント判定を取り入れた算出）
   const cardStatsMap = useMemo(() => {
     const map = new Map<string, { total: number; tradeable: number }>();
+    
     collectionRecords.forEach((r) => {
       const cId = String(r.card_id);
       const qty = r.quantity || 0;
       if (!map.has(cId)) map.set(cId, { total: 0, tradeable: 0 });
       const entry = map.get(cId)!;
       entry.total += qty;
+
+      // このインベントリを所持するアカウントの本垢フラグを確認
+      const prof = dbProfiles.find(p => p.id === r.p_uid);
+      const isMain = prof?.is_main ?? false;
+
+      // 本アカウントなら余剰分(qty - 1)のみ、未登録なら持っている分(qty)すべてをトレード可能枠に加算
+      if (isMain) {
+        entry.tradeable += Math.max(0, qty - 1);
+      } else {
+        entry.tradeable += qty;
+      }
     });
     
-    map.forEach(val => {
-      val.tradeable = Math.max(0, val.total - 1);
-    });
     return map;
-  }, [collectionRecords]);
+  }, [collectionRecords, dbProfiles]);
 
-  // ★選択されたカードに対する「アカウント個別」の所持状況と交換候補を詳しく解析
+  // ★選択されたカードに対する「アカウント個別」の解析（本アカウント判定による分岐）
   const accountBreakdown = useMemo(() => {
     if (!selectedCard) return [];
 
-    // 全インベントリから、今選択しているカードのデータだけを抽出
     const targetRecords = collectionRecords.filter(r => String(r.card_id) === String(selectedCard.id));
-    
-    // プロフィール情報をベースに、アカウントごとの所持状況をマッピング
-    const accountMap = new Map<string, AccountStatus & { name: string }>();
+    const accountMap = new Map<string, AccountStatus>();
 
     dbProfiles.forEach(prof => {
       const record = targetRecords.find(r => r.p_uid === prof.id);
       const total = record?.quantity || 0;
+      const isMain = prof.is_main ?? false; // 本アカウントフラグ
       
-      // 同じランクの余剰カード（交換に出せるカード）を抽出
+      // 同じランクの交換候補カードを抽出
       const offeredCards = allCards
         .filter(c => 
           c.rank !== undefined &&
@@ -126,7 +159,9 @@ export default function TradePage() {
         )
         .filter(c => {
           const r = collectionRecords.find(rec => rec.p_uid === prof.id && String(rec.card_id) === String(c.id));
-          return (r?.quantity || 0) > 1;
+          const qty = r?.quantity || 0;
+          // 本アカウントなら2枚以上（余剰）必要、未登録アカウントなら1枚以上（>0）あれば差し出せる
+          return isMain ? qty > 1 : qty > 0;
         })
         .map(c => ({
           id: c.id,
@@ -138,30 +173,28 @@ export default function TradePage() {
         p_uid: prof.id,
         name: prof.display_name || 'User',
         total: total,
-        tradeable: Math.max(0, total - 1),
+        // トレード可能数の算出を分岐
+        tradeable: isMain ? Math.max(0, total - 1) : total,
         isOwner: user?.uid === prof.id,
+        isMain: isMain,
         offeredCards
-      } as any);
+      });
     });
 
     return Array.from(accountMap.values())
       .filter(acc => {
-        // 候補があるアカウントのみを表示
-        // 1. 余剰を持っている（出し手）
-        // 2. 未所持かつ、代わりに交換に出せるカードがある（受け手）
         return acc.tradeable > 0 || (acc.total === 0 && acc.offeredCards.length > 0);
       })
       .sort((a, b) => {
-        // 1. 余剰あり（トレードの出し手）を最優先
         if (a.tradeable > 0 && b.tradeable === 0) return -1;
         if (a.tradeable === 0 && b.tradeable > 0) return 1;
-        // 2. 未所持（トレードの受け手候補）を次に優先
         if (a.total === 0 && b.total > 0) return -1;
         if (a.total > 0 && b.total === 0) return 1;
         return 0;
       });
   }, [selectedCard, collectionRecords, user, dbProfiles, allCards]);
 
+  // ★表示アルゴリズム（自分起点優先 ＋ マッチング確率ハイブリッドソート）
   const tradeableCards = useMemo(() => {
     return allCards.filter((card) => {
       const rank = card.rank || 0;
@@ -175,8 +208,43 @@ export default function TradePage() {
         if (!display.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       }
       return true;
-    }).sort((a, b) => (b.rank || 0) - (a.rank || 0));
-  }, [allCards, cardStatsMap, searchQuery]);
+    }).map((card) => {
+      const cardRecords = collectionRecords.filter(r => String(r.card_id) === String(card.id));
+      
+      let holdersCount = 0;
+      let missingCount = 0;
+      let isMyMissing = true;
+      let isMyHolding = false;
+
+      dbProfiles.forEach(prof => {
+        const record = cardRecords.find(r => r.p_uid === prof.id);
+        const total = record?.quantity || 0;
+        const isMe = user?.uid === prof.id;
+
+        if (total > 0) {
+          holdersCount++;
+          if (isMe) {
+            isMyMissing = false;
+            isMyHolding = true;
+          }
+        } else {
+          missingCount++;
+        }
+      });
+
+      // スコアリングロジック
+      let personalScore = 0;
+      if (isMyMissing && holdersCount > 0) personalScore = 3000;      // 自分が未所持で誰かが持っている（最高優先）
+      else if (isMyHolding && missingCount > 0) personalScore = 2000; // 自分が所持していて誰かが未所持
+
+      const matchScore = holdersCount * missingCount; // 需要と供給のペア成立確率
+      const rankScore = (card.rank || 0) * 10;        // レア度補正
+
+      const totalScore = personalScore + matchScore + rankScore;
+
+      return { ...card, totalScore };
+    }).sort((a, b) => b.totalScore - a.totalScore);
+  }, [allCards, cardStatsMap, searchQuery, collectionRecords, user, dbProfiles]);
 
   if (loading) {
     return (
@@ -233,14 +301,14 @@ export default function TradePage() {
             <span className="text-5xl font-bold italic tracking-tighter">
               {tradeableCards.reduce((acc, c) => acc + (cardStatsMap.get(String(c.id))?.tradeable || 0), 0)}
             </span>
-            <span className="text-sm font-semibold opacity-60 uppercase">Duplicates Found</span>
+            <span className="text-sm font-semibold opacity-60 uppercase">Total Movable</span>
           </div>
         </div>
 
         {/* List Section Title */}
         <div className="flex items-center justify-between px-1">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            {tradeableCards.length} <span className="text-slate-300">Unique Cards</span>
+            {tradeableCards.length} <span className="text-slate-300">Matching Cards</span>
           </p>
         </div>
 
@@ -254,28 +322,27 @@ export default function TradePage() {
           ) : (
             tradeableCards.map((card) => {
               const display = resolveCardDisplay(card);
-              const stats = cardStatsMap.get(String(card.id));
               
-              // カードごとの各アカウントの所持状況サマリーを計算
+              // アカウント状況サマリーの計算
               const cardRecords = collectionRecords.filter(r => String(r.card_id) === String(card.id));
               const accountSummary = dbProfiles
                 .map(prof => {
                   const record = cardRecords.find(r => r.p_uid === prof.id);
                   const total = record?.quantity || 0;
+                  const isMain = prof.is_main ?? false;
                   return {
                     name: prof.display_name || 'User',
-                    tradeable: Math.max(0, total - 1),
-                    isMissing: total === 0,
+                    tradeable: isMain ? Math.max(0, total - 1) : total,
                     total
                   };
                 })
-                .filter(acc => acc.total > 0) // 所持しているアカウントのみ表示
+                .filter(acc => acc.total > 0)
                 .sort((a, b) => b.total - a.total);
               
               return (
                 <button
                   key={card.id}
-                  onClick={() => setSelectedCard(card)} // ★クリックで詳細モーダル展開
+                  onClick={() => setSelectedCard(card)} 
                   className="bg-white text-left focus:outline-none w-full rounded-[2rem] border border-slate-100 p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden"
                 >
                   <div className="flex justify-between items-start gap-2">
@@ -299,7 +366,7 @@ export default function TradePage() {
                       </div>
                     </div>
 
-                    {/* 右側: アカウント状況サマリー (2列 & スクロール) */}
+                    {/* 右側: アカウント状況サマリー */}
                     <div className="grid grid-cols-2 gap-1 max-h-20 overflow-y-auto shrink-0 w-[74px] no-scrollbar content-start">
                       {accountSummary.map((acc, idx) => (
                         <div 
@@ -325,7 +392,7 @@ export default function TradePage() {
         </div>
       </div>
 
-      {/* ★ アカウントごとの余剰・未所持を可視化するモーダル UI */}
+      {/* アカウントごとの内訳モーダル UI */}
       {selectedCard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
@@ -361,48 +428,62 @@ export default function TradePage() {
             {/* アカウントリスト一覧 */}
             <div className="space-y-3 overflow-y-auto pb-10 flex-1 pr-1 -mr-1 custom-scrollbar">
               {accountBreakdown.map((acc) => {
-                // ステータス判定
                 const isMissing = acc.total === 0;
                 const hasTradeable = acc.tradeable > 0;
-                
-                // トレード成立のためのペア相手を探す
-                const senderAccount = accountBreakdown.find(a => a.tradeable > 0);
                 const potentialReceivers = accountBreakdown.filter(a => a.total === 0);
-                const receiverAccount = accountBreakdown.find(a => a.total === 0);
 
                 return (
                   <div 
                     key={acc.p_uid}
                     className={`p-3 rounded-2xl border flex items-start justify-between transition-all relative ${
                       hasTradeable 
-                        ? 'bg-blue-50/60 border-blue-100' // 余剰あり（青）
+                        ? 'bg-blue-50/60 border-blue-100' 
                         : isMissing 
-                        ? 'bg-rose-50/40 border-rose-100' // 未所持（赤）
-                        : 'bg-slate-50 border-slate-100'  // 1枚のみ（グレー）
+                        ? 'bg-rose-50/40 border-rose-100' 
+                        : 'bg-slate-50 border-slate-100'  
                     }`}
                   >
                     <div className="space-y-1 min-w-0 flex-1 pr-16">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-bold text-slate-700 truncate block max-w-[150px]">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-sm font-bold text-slate-700 truncate block max-w-[120px]">
                           {acc.name}
                         </span>
+                        
+                        {/* ★本垢 or サブ（未登録）の識別バッジ */}
+                        {acc.isMain ? (
+                          <span className="text-[8px] bg-blue-600 text-white font-bold px-1.5 py-0.5 rounded-md">本垢</span>
+                        ) : (
+                          <span className="text-[8px] bg-amber-500 text-white font-bold px-1.5 py-0.5 rounded-md">未登録</span>
+                        )}
+
                         {acc.isOwner && (
                           <span className="text-[9px] bg-slate-900 text-white font-bold px-1.5 py-0.5 rounded uppercase tracking-widest">
                             YOU
                           </span>
                         )}
                       </div>
+                      
                       <p className="text-xs font-semibold text-slate-400">
                         所持数: <span className="text-slate-700 font-bold">{acc.total}</span>
                       </p>
 
-                      {/* トレード元（出し手）の場合：送り先候補とセットで表示 */}
+                      {/* ★本垢登録切り替えボタン（自分の所有端末のみ操作可能にする例） */}
+                      {acc.isOwner && (
+                        <button 
+                          onClick={() => toggleMainAccount(acc.p_uid, acc.isMain)}
+                          className="text-[9px] text-blue-500 hover:underline block transition-all"
+                        >
+                          {acc.isMain ? "本垢設定を解除" : "この端末を本垢に登録"}
+                        </button>
+                      )}
+
+                      {/* トレード元の場合：送り先候補の表示 */}
                       {hasTradeable && potentialReceivers.length > 0 && (
                         <div className="mt-2">
                           <div className="space-y-3">
                             {potentialReceivers.map((receiver) => (
                               <div key={receiver.p_uid} className="pl-2 border-l-2 border-blue-100">
-                                <p className="text-[9px] font-bold text-slate-500 mb-1.5 flex items-center justify-between">To: {receiver.name}</p>
+                                <p className="text-[9px] font-bold text-slate-500 mb-1.5">To: {receiver.name}</p>
                                 <div className="grid grid-cols-1 gap-1">
                                   {receiver.offeredCards.slice(0, 3).map((offered, i) => (
                                     <Link 
@@ -427,19 +508,18 @@ export default function TradePage() {
                           </div>
                         </div>
                       )}
-
                     </div>
 
                     {/* ステータスバッジの出し分け */}
                     <div className="flex items-center gap-2 absolute top-3 right-3">
                       {hasTradeable ? (
                         <Link
-                            href={`/trade/complete?cardId=${selectedCard.id}&fromProfileId=${acc.p_uid}`}
-                            className="flex items-center gap-1 bg-blue-600 text-white px-2 py-1 rounded-lg text-[9px] font-bold shadow-sm active:scale-95 transition-all shrink-0"
-                          >
-                            <ArrowLeftRight size={10} />
-                            <span>トレード</span>
-                          </Link>
+                          href={`/trade/complete?cardId=${selectedCard.id}&fromProfileId=${acc.p_uid}`}
+                          className="flex items-center gap-1 bg-blue-600 text-white px-2 py-1 rounded-lg text-[9px] font-bold shadow-sm active:scale-95 transition-all shrink-0"
+                        >
+                          <ArrowLeftRight size={10} />
+                          <span>トレード</span>
+                        </Link>
                       ) : isMissing ? (
                         <div className="flex items-center gap-1 bg-rose-500 text-white px-2.5 py-1 rounded-xl text-[10px] font-bold shadow-sm">
                           <AlertCircle size={10} />
@@ -458,7 +538,7 @@ export default function TradePage() {
               })}
             </div>
 
-            {/* モーダルフッター: 完了ボタンを固定配置 */}
+            {/* モーダルフッター */}
             <div className="mt-2 pt-2 border-t border-slate-100">
               <button 
                 onClick={() => setSelectedCard(null)}
@@ -467,7 +547,7 @@ export default function TradePage() {
                 完了
               </button>
             </div>
-        </div>
+          </div>
         </div>
       )}
 

@@ -1,12 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Camera } from 'lucide-react';
+import { Camera, Move } from 'lucide-react';
 import { createWorker } from 'tesseract.js';
 import { resolveCardDisplay } from './utils';
 import { isPublicPath } from './AuthGate';
+import { useLayoutEditMode, useUiPlacement } from './useUiPlacement';
 
 const API_KEY_ROBO = process.env.NEXT_PUBLIC_ROBOFLOW_API_KEY;
 const PROJECT_CARD = 'card-tvjwd/1';
@@ -252,17 +253,75 @@ export async function directAI(base64Image: string, masterData: any[]) {
 
 export function ScannerFab() {
   const pathname = usePathname();
+  const { placement, setPlacement } = useUiPlacement('scannerFab');
+  const { enabled: editMode } = useLayoutEditMode();
+  const dragRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
 
   // 公開ページ、またはスキャン実行画面そのものではボタンを非表示にする
   // "/direct_add" など、スキャンを呼び出したい画面では表示されるようにします
   const hiddenPaths = ['/scanner'];
   if (!pathname || isPublicPath(pathname) || hiddenPaths.includes(pathname)) return null;
 
+  const startDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const frame = event.currentTarget.closest('[data-placement-target]') as HTMLDivElement | null;
+    if (!frame) return;
+
+    event.preventDefault();
+    const rect = frame.getBoundingClientRect();
+    dragRef.current = {
+      offsetX: event.clientX - (rect.left + rect.width / 2),
+      offsetY: event.clientY - rect.bottom,
+    };
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      if (!dragRef.current) return;
+      const centerX = moveEvent.clientX - dragRef.current.offsetX;
+      const bottom = window.innerHeight - (moveEvent.clientY - dragRef.current.offsetY);
+      setPlacement({
+        ...placement,
+        x: (centerX / window.innerWidth) * 100,
+        bottom,
+      });
+    };
+
+    const stopDrag = () => {
+      dragRef.current = null;
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', stopDrag);
+      window.removeEventListener('pointercancel', stopDrag);
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', stopDrag);
+    window.addEventListener('pointercancel', stopDrag);
+  };
+
   return (
-    <div className="fixed bottom-28 left-1/2 -translate-x-1/2 w-full max-w-md px-5 flex justify-end z-40 pointer-events-none">
+    <div
+      data-placement-target
+      style={{
+        left: `${placement.x}%`,
+        bottom: `${placement.bottom}px`,
+        opacity: placement.opacity ?? 1,
+      }}
+      className={`fixed -translate-x-1/2 z-40 pointer-events-none ${editMode ? 'z-[90]' : ''}`}
+    >
+      {editMode && (
+        <button
+          type="button"
+          onPointerDown={startDrag}
+          className="absolute -top-5 left-1/2 -translate-x-1/2 pointer-events-auto touch-none cursor-grab active:cursor-grabbing w-8 h-8 rounded-full bg-blue-600 text-white shadow-lg shadow-blue-200 flex items-center justify-center border-4 border-white"
+          aria-label="スキャンボタンの位置を変更"
+        >
+          <Move size={13} />
+        </button>
+      )}
       <Link
         href="/scanner"
-        className="pointer-events-auto w-14 h-14 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200 flex items-center justify-center active:scale-95 transition-transform"
+        onClick={(event) => {
+          if (editMode) event.preventDefault();
+        }}
+        className={`pointer-events-auto w-14 h-14 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200 flex items-center justify-center active:scale-95 transition-transform ${editMode ? 'ring-2 ring-blue-500/40' : ''}`}
         aria-label="スキャンする"
       >
         <Camera size={22} strokeWidth={2.5} />

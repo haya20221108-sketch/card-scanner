@@ -35,7 +35,6 @@ export default function EventPage() {
   return (
     <div className="min-h-screen bg-slate-50 p-6 pb-32 font-sans max-w-md mx-auto text-slate-900">
       <header className="flex items-center gap-4 mb-8 pt-4">
-        <Link href="/" className="p-2 -ml-2 text-slate-400"><ChevronLeft /></Link>
         <div>
           <h1 className="text-2xl font-black italic uppercase tracking-tighter">Activity</h1>
           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Local Timeline</p>
